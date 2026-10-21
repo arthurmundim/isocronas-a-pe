@@ -2,6 +2,15 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.5.4] - 2026-10-21
+
+### Alterado
+- "Rota a pé" (resumo e perfil de elevação) fica visível durante o "Quando?" e vira uma linha de resumo ao clicar "Continuar"; ao reabrir, o perfil é redesenhado.
+
+### Corrigido
+- "■ Parar o texto" aparecia antes de gerar: o CSS do botão vencia o atributo `hidden`. Agora `hidden` sempre esconde.
+- "Gerar com IA" sumia em navegadores sem WebGPU; agora fica visível, desativado, com o motivo ("indisponível neste navegador").
+
 ## [0.5.3] - 2026-10-21
 
 ### Alterado
@@ -85,6 +94,7 @@ Primeira versão funcional.
 - Layout responsivo: painel lateral vira bottom sheet no celular.
 - Cache em memória, filas com intervalo mínimo por API e fallback/backoff entre servidores Overpass.
 
+[0.5.4]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.0...v0.5.1
