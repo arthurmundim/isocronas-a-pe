@@ -62,8 +62,9 @@ input[type="range"] { flex: 1.3; accent-color: var(--accent); }
 #suggestions li.active, #suggestions li:hover { background: var(--bg-2); }
 
 /* ==== CONTROLES DO MAPA ==== */
-.map-btn { background: var(--bg); color: var(--fg); border: 0; padding: 0 10px; height: 29px; cursor: pointer; font-size: 13px; }
+.maplibregl-ctrl-group button.map-btn { width: auto; white-space: nowrap; background: var(--bg); color: var(--fg); padding: 0 10px; font-size: 13px; }
 .maplibregl-ctrl-group { background: var(--bg); }
+:root[data-theme="dark"] .maplibregl-ctrl-icon { filter: invert(1); }
 .maplibregl-popup-content { background: var(--bg); color: var(--fg); border-radius: 8px; padding: 10px 12px; }
 .maplibregl-popup-tip { border-top-color: var(--bg) !important; border-bottom-color: var(--bg) !important; }
 
@@ -217,6 +218,52 @@ const map = new maplibregl.Map({
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'top-right');
 map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } }), 'top-right');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+
+// ==== CAMADAS (sobrevivem à troca de estilo) ====
+// setStyle() apaga sources/layers custom; cada overlay registrado é re-adicionado em todo 'style.load'.
+const EMPTY = { type: 'FeatureCollection', features: [] };
+const sourceData = {};
+const overlays = [];
+function registerOverlay(addFn) {
+  overlays.push(addFn);
+  if (map.isStyleLoaded()) addFn();
+}
+map.on('style.load', () => overlays.forEach((fn) => fn()));
+function ensureSource(id) {
+  if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data: sourceData[id] || EMPTY });
+}
+function setSourceData(id, fc) {
+  sourceData[id] = fc || EMPTY;
+  map.getSource(id)?.setData(sourceData[id]);
+}
+
+// ==== ESTILO CLARO/ESCURO ====
+class StyleToggle {
+  onAdd() {
+    this.el = document.createElement('div');
+    this.el.className = 'maplibregl-ctrl maplibregl-ctrl-group';
+    this.el.innerHTML = '<button class="map-btn" type="button" title="Alternar mapa claro/escuro"></button>';
+    this.el.firstChild.addEventListener('click', () => setMapStyle(state.style === 'light' ? 'dark' : 'light'));
+    this.render();
+    return this.el;
+  }
+  render() { if (this.el) this.el.firstChild.textContent = state.style === 'light' ? '🌙 Escuro' : '☀️ Claro'; }
+  onRemove() { this.el.remove(); }
+}
+const styleToggle = new StyleToggle();
+map.addControl(styleToggle, 'top-left');
+
+function setMapStyle(style, { apply = true } = {}) {
+  if (!CONFIG.styles[style]) style = 'light';
+  const changed = style !== state.style;
+  state.style = style;
+  document.documentElement.dataset.theme = style;
+  styleToggle.render();
+  // diff:false força um 'style.load' completo, que re-adiciona os overlays.
+  if (changed && apply) map.setStyle(CONFIG.styles[style], { diff: false });
+  onStateChanged();
+}
+function onStateChanged() { /* estado na URL: seção final */ }
 
 const pin = new maplibregl.Marker({ color: '#e5484d', draggable: true });
 pin.on('dragend', () => { const { lng, lat } = pin.getLngLat(); setPoint(lat, lng, null, { fly: false }); });
