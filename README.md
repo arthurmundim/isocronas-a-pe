@@ -10,11 +10,11 @@ Exploração urbana a pé: busque um endereço, CEP ou lugar (ou clique no mapa)
 - Local: baixe o repositório e abra `index.html` no navegador (funciona via `file://`, sem build e sem API keys). Mantenha as pastas `css/` e `js/` ao lado.
 
 Dicas de uso:
-- Clique **dentro** da mancha para ver a rota a pé e o perfil de elevação; clique **fora** (ou arraste o pin, ou use o clique direito) para mudar o ponto.
+- A mancha mostra as ruas alcançáveis, coloridas pelo tempo. Clique **dentro** dela para ver a rota a pé e o perfil de elevação; clique **fora** (ou arraste o pin, ou use o clique direito) para mudar o ponto.
 - Para um número exato, digite "Rua X 123" e tecle Enter. Se o número não estiver no OpenStreetMap, o pin fica na rua e dá para arrastar.
 - Escolha o ritmo (Fotografando, Passeio, Normal, Apressado) e ligue "Evitar ladeiras" se quiser priorizar ruas planas.
 - Com a rota aberta, escolha "Sair às" ou "Chegar às" (ou um atalho como "Chegar: Golden tarde") e marque os estilos de foto que você gosta: o app sugere o que observar no caminho (contraluz, fachadas iluminadas, corredores de luz, lugares perto da rota). As linhas do sol passam a sair do destino.
-- Embaixo das dicas, "✨ Sugestão com IA" escreve um texto de amigo fotógrafo sobre a caminhada, com as configurações de câmera de cada momento. Escolha o tamanho (Curto / Médio / Longo) e clique. Roda no seu aparelho, sem enviar dados; na primeira vez baixa o modelo (~0,9 GB).
+- Em "Sugestões para o caminho", escolha o tamanho e depois "⚡ Resposta rápida" (dicas por regras, na hora) ou "✨ Gerar com IA", que escreve um texto de amigo fotógrafo sobre a caminhada, com as configurações de câmera de cada momento. Roda no seu aparelho, sem enviar dados; na primeira vez baixa o modelo (~0,9 GB).
 - O link da página guarda a exploração (ponto, anéis, velocidade, filtros, data e tema). Use "Copiar link" para compartilhar.
 
 ## APIs usadas

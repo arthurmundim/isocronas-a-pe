@@ -2,6 +2,15 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.5.0] - 2026-10-21
+
+### Alterado
+- A mancha no mapa agora é a rede de ruas alcançáveis (Valhalla `/expansion`), cada rua na cor do anel de tempo, mais clara, com a rota selecionada por cima. Se as ruas falharem, volta a área de antes.
+- As sugestões não aparecem mais de cara: depois do horário e dos estilos, você escolhe "⚡ Resposta rápida" (regras) ou "✨ Gerar com IA". O tamanho (Curto / Médio / Longo) vale para as duas: 3 / 5 / 8 dicas ou 3 / 4 / 6 momentos. Com IA, a resposta rápida fica recolhida abaixo do texto.
+
+### Adicionado
+- Rolagem automática do painel até a parte em execução ou que pede input: Caminhada ao escolher um ponto, Rota e "Quando?" ao clicar um destino, progresso e texto da IA enquanto ela escreve.
+
 ## [0.4.0] - 2026-10-21
 
 ### Adicionado
@@ -51,6 +60,7 @@ Primeira versão funcional.
 - Layout responsivo: painel lateral vira bottom sheet no celular.
 - Cache em memória, filas com intervalo mínimo por API e fallback/backoff entre servidores Overpass.
 
+[0.5.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.1.0...v0.2.0
