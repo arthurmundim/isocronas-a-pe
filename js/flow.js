@@ -17,6 +17,7 @@ const STEP_SUMMARY = {
   styles: () => `📷 ${esc(PHOTO_STYLES.filter((s) => state.styles.has(s.id)).map((s) => s.label).join(', ') || 'sem preferência de estilo')}`,
   suggest: () => `${aiState.mode === 'ai' ? '✨ Texto com IA' : '⚡ Resposta rápida'} · ${AI.sizes[aiState.size].label}`,
   pois: () => (poiLoading ? '📸 Pontos para fotografar: carregando…' : `📸 ${state.pois.length} pontos para fotografar na área`),
+  route: () => `🗺️ Rota até ${esc((state.trip && buildFacts()?.destino.nome) || 'o destino')} · ${esc($('#route-summary').textContent || 'calculando…')}`,
 };
 
 function refreshSummary(n) {
@@ -36,6 +37,8 @@ function openStep(n) {
   const el = stepEl(n);
   el.hidden = false;
   el.classList.remove('collapsed');
+  // O perfil de elevação é desenhado num canvas: minimizado ele tem largura 0, então redesenha ao reabrir.
+  if (n === 'route' && state.trip?.elev) drawElevation(state.trip.elev.pts);
 }
 function hideStep(n) {
   const el = stepEl(n);
@@ -52,6 +55,7 @@ function completeStep(n) {
     if (!state.routeTarget) showPoisStep();
     return;
   }
+  if (n === 'when') collapseStep('route'); // a rota fica visível enquanto se escolhe o horário e minimiza depois
   const next = NEXT_STEP[n];
   if (!next) return;
   if (stepEl(next).hidden) openStep(next);
@@ -96,6 +100,7 @@ function flowRouteStart() {
   $('#sec-dest').hidden = true;
   $('#dest-hint').hidden = true;
   collapseStep('pois');
+  openStep('route');
   openStep('when');
   hideStep('styles');
   hideStep('suggest');
