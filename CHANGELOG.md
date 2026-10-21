@@ -2,6 +2,21 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.3.0] - 2026-10-21
+
+### Adicionado
+- Horário da caminhada na rota: "Sair às" ou "Chegar às", com atalhos para chegar no nascer, golden hour da manhã/tarde, pôr do sol e blue hour. Mostra saída, chegada, fase da luz e nuvens previstas.
+- Estilos de foto preferidos (street, arquitetura, paisagem urbana, retrato, noturna, minimalismo, natureza urbana, arte urbana), salvos no navegador e no link.
+- Sugestões do que observar no caminho, geradas por regras: fase da luz na chegada e eventos durante a caminhada, contraluz e fachadas iluminadas por trecho, corredores de luz, sombras longas, nuvens, subidas, ponto mais alto e lugares a até 60 m da rota.
+- "Dados usados nas sugestões": os fatos calculados em JSON, copiáveis (base para a futura camada de LLM).
+
+### Alterado
+- Com uma rota ativa, horários de luz e linhas de nascer/pôr do sol passam a partir do destino clicado.
+- Código dividido em `index.html` + `css/app.css` + `js/*.js` (sem build, ainda funciona via `file://`).
+
+### Corrigido
+- Camadas do mapa (pontos, linhas do sol) que às vezes não apareciam por uma corrida entre o carregamento do estilo e dos scripts.
+
 ## [0.2.0] - 2026-10-21
 
 ### Adicionado
@@ -29,5 +44,6 @@ Primeira versão funcional.
 - Layout responsivo: painel lateral vira bottom sheet no celular.
 - Cache em memória, filas com intervalo mínimo por API e fallback/backoff entre servidores Overpass.
 
+[0.3.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/arthurmundim/isocronas-a-pe/releases/tag/v0.1.0

@@ -12,11 +12,20 @@ Projeto **pessoal**. Este repositório usa a identidade pessoal:
 
 ## Restrições
 
-- Um único `index.html` (HTML + CSS + JS inline), sem build step, sem API keys.
+- Arquivos estáticos sem build step e sem API keys: `index.html` + `css/app.css` + `js/*.js` (dividido em 2026-10-21, quando o arquivo único chegou a ~1.300 linhas).
+- Scripts **clássicos** (`<script src>`), não ES modules: módulos são bloqueados em `file://`. Eles compartilham as `const`/`function` globais, mas o hoisting não atravessa arquivos, então a ordem de carga importa (ver "Estrutura").
 - Libs via CDN com versão fixada (jsDelivr).
 - Funciona no GitHub Pages e aberto localmente (`file://`).
 - Interface em português; termos técnicos podem ficar em inglês.
-- Se `index.html` passar de ~1.500 linhas, propor migração para múltiplos arquivos estáticos (sem build) antes de fazer.
+
+## Estrutura (ordem de carga)
+
+1. `config.js`: `CONFIG`, `state`, `PHOTO_STYLES`, `CATEGORIES`.
+2. `util.js`: DOM, status/toast, cache + filas (`cached`, `limits`), `fetchJSON`, parsers e formatos usados já no carregamento (`parseTimes`, `paceOf`, `todayStr`, fuso, `zonedDate`, estilos salvos).
+3. `url.js`: hash da URL. 4. `map.js`: mapa, overlays, pin, `setPoint`. 5. `search.js`. 6. `iso.js`. 7. `route.js`. 8. `pois.js`. 9. `light.js`.
+10. `trip.js`: horário sair/chegar e **fatos determinísticos** da rota (`buildFacts`). 11. `tips.js`: motor de regras sobre os fatos. 12. `main.js`: inicialização.
+
+Código executado no carregamento só pode usar o que foi definido em arquivos anteriores; handlers e callbacks podem usar qualquer coisa.
 
 ## Libs (CDN, versões fixadas)
 
@@ -51,11 +60,15 @@ Todas as chamadas passam por um cache em memória (chave = URL + body). Erros de
 - **Luz**: golden hour = sol entre −4° e +6°; blue hour = entre −6° e −4°. Horários no fuso do ponto (do Open-Meteo).
 - **Estado na URL**: `#lat&lng&q&t&v&h&cat&d&s`; `cat` e `d` só aparecem quando diferem do padrão.
 - **Teste local**: o browser do app Claude abre `file://` como `data:` URL (sem hash); para testar o hash, servir a pasta via HTTP local.
+- **Overlays x carregamento**: o `style.load` pode disparar entre um `<script src>` e outro, e `isStyleLoaded()` ainda pode ser false logo depois; `registerOverlay` usa a flag própria `styleReady` (senão camadas registradas depois sumiam de forma intermitente).
+- **Referência da luz**: com rota ativa, horários e linhas do sol usam o destino (`lightAnchor()`); sem rota, o pin.
+- **Sugestões**: `buildFacts()` monta um objeto só com dados calculados (horários, sol por trecho, nuvens, elevação, pontos a ≤ 60 m da rota, estilos). As regras de `tips.js` leem **só** esse objeto, e ele é exibido/copiável como JSON: é o mesmo que será enviado ao LLM no navegador (fase 2). Trechos vêm da geometria da rota (pedaços de ~80 m unidos por direção ±25°), não das manobras do Valhalla (calçadas sem nome, manobras de ~1 km). Nomes de rua via reverse do Photon (`osm_tag=highway`) no meio de cada trecho. Com nuvens ≥ 85%, regras que dependem de sol direto não disparam.
+- **Estilos de foto**: salvos no `localStorage` (`isocronas.styles`) e no hash (`f=`); o hash tem prioridade.
 
 ## Convenções de código
 
 - JS moderno (ES2020+), sem frameworks. `const`/`let`, `async/await`.
-- `index.html` organizado em seções comentadas: `// ==== SEÇÃO ====`.
+- Um arquivo por área, organizado em seções comentadas: `// ==== SEÇÃO ====`.
 - Estado da exploração (lat/lng, tempos, filtros) serializado no hash da URL.
 - Commits pequenos em Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`), um por etapa testada.
 - `CHANGELOG.md` atualizado a cada versão; versões marcadas com tags `vX.Y.Z`.
@@ -63,6 +76,8 @@ Todas as chamadas passam por um cache em memória (chave = URL + body). Erros de
 ## Roadmap
 
 v0.1.0 (ver `CHANGELOG.md`), publicada em https://arthurmundim.github.io/isocronas-a-pe/: busca (CEP/Photon/clique), basemap claro/escuro, isócronas 5/10/15/20 min com velocidade e `use_hills`, rota + perfil de elevação, pontos para fotografar (Overpass), luz para foto (SunCalc + Open-Meteo), estado na URL, layout responsivo (bottom sheet no celular).
+
+Próximo: **fase 2** — reescrever as sugestões com um LLM rodando no navegador (WebLLM/WebGPU, ex.: Qwen2.5 1.5B/3B), recebendo o JSON de `buildFacts()`. Começar por um experimento separado (download, velocidade, qualidade em PT, `file://`) antes de integrar.
 
 Fora do escopo da v1 (Issues com label `roadmap`):
 - Modo bike e transporte público.

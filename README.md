@@ -7,12 +7,13 @@ Exploração urbana a pé: busque um endereço, CEP ou lugar (ou clique no mapa)
 ## Como abrir
 
 - Online: a URL acima (GitHub Pages).
-- Local: baixe o repositório e abra `index.html` no navegador (funciona via `file://`, sem build e sem API keys).
+- Local: baixe o repositório e abra `index.html` no navegador (funciona via `file://`, sem build e sem API keys). Mantenha as pastas `css/` e `js/` ao lado.
 
 Dicas de uso:
 - Clique **dentro** da mancha para ver a rota a pé e o perfil de elevação; clique **fora** (ou arraste o pin, ou use o clique direito) para mudar o ponto.
 - Para um número exato, digite "Rua X 123" e tecle Enter. Se o número não estiver no OpenStreetMap, o pin fica na rua e dá para arrastar.
 - Escolha o ritmo (Fotografando, Passeio, Normal, Apressado) e ligue "Evitar ladeiras" se quiser priorizar ruas planas.
+- Com a rota aberta, escolha "Sair às" ou "Chegar às" (ou um atalho como "Chegar: Golden tarde") e marque os estilos de foto que você gosta: o app sugere o que observar no caminho (contraluz, fachadas iluminadas, corredores de luz, lugares perto da rota). As linhas do sol passam a sair do destino.
 - O link da página guarda a exploração (ponto, anéis, velocidade, filtros, data e tema). Use "Copiar link" para compartilhar.
 
 ## APIs usadas
@@ -21,7 +22,7 @@ Dicas de uso:
 |---|---|
 | [OpenFreeMap](https://openfreemap.org) | Basemap claro/escuro |
 | [BrasilAPI](https://brasilapi.com.br) | Busca por CEP |
-| [Photon](https://photon.komoot.io) | Autocomplete de endereços/lugares |
+| [Photon](https://photon.komoot.io) | Autocomplete de endereços/lugares e nome das ruas de cada trecho da rota (reverse) |
 | [Nominatim](https://nominatim.org) | Geocodificar a rua de um CEP (nunca autocomplete) |
 | [Valhalla (FOSSGIS)](https://valhalla1.openstreetmap.de) | Isócronas, rota e elevação a pé |
 | [Overpass API](https://overpass-api.de) | Pontos para fotografar (dados OpenStreetMap) |
