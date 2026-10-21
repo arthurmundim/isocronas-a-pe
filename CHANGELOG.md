@@ -8,8 +8,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); 
 - A mancha no mapa agora é a rede de ruas alcançáveis (Valhalla `/expansion`), cada rua na cor do anel de tempo, mais clara, com a rota selecionada por cima. Se as ruas falharem, volta a área de antes.
 - As sugestões não aparecem mais de cara: depois do horário e dos estilos, você escolhe "⚡ Resposta rápida" (regras) ou "✨ Gerar com IA". O tamanho (Curto / Médio / Longo) vale para as duas: 3 / 5 / 8 dicas ou 3 / 4 / 6 momentos. Com IA, a resposta rápida fica recolhida abaixo do texto.
 
+- Painel em etapas: ponto de partida → Caminhada → destino no mapa → Quando? → informações + estilos de foto → resposta rápida ou IA. Cada etapa concluída vira uma linha de resumo clicável (reabre para editar), com botão "Continuar". Pontos para fotografar e Luz para foto minimizam quando há rota (os dados seguem nas sugestões) e reabrem ao limpar a rota.
+- "Anéis (min)" passou a se chamar "Tempos de caminhada (min)". O dia também pode ser escolhido no "Quando?".
+- Lugares sem nome são descritos pela rua (ex.: "café sem nome no mapa, na altura da Rua X"), inclusive origem, destino e eventos de luz, nunca "o café" ou "no caminho".
+
 ### Adicionado
-- Rolagem automática do painel até a parte em execução ou que pede input: Caminhada ao escolher um ponto, Rota e "Quando?" ao clicar um destino, progresso e texto da IA enquanto ela escreve.
+- Rolagem automática do painel até a parte em execução ou que pede input: Caminhada ao escolher um ponto, Rota e "Quando?" ao clicar um destino, cada etapa seguinte ao clicar "Continuar", progresso e texto da IA enquanto ela escreve.
+- IA com regras duras no prompt (só o período da caminhada, só os números de câmera de cada momento, sem equipamento inventado, coerência com nuvens e eventos de luz, sem lugares vagos) e contexto do dia (golden/blue hour, pôr do sol e nuvens dentro da janela da caminhada).
+- Checagem do texto gerado: horários, ISO/abertura/velocidade/EV, equipamentos, eventos de luz fora do período, sol direto com céu encoberto e lugares vagos. Se algo falhar, a IA refaz uma vez com temperatura menor; se persistir, o aviso lista o que conferir.
 
 ## [0.4.0] - 2026-10-21
 
