@@ -247,15 +247,15 @@ async function renderAiControls() {
     `<button type="button" role="radio" aria-checked="${k === aiState.size}" data-size="${k}">${s.label}<small>${s.read}</small></button>`).join('');
   $('#quick-go').setAttribute('aria-pressed', String(aiState.mode === 'quick'));
   $('#ai-go').setAttribute('aria-pressed', String(aiState.mode === 'ai'));
+  $('#ai-stop').hidden = !aiState.busy;
   const reason = await aiSupport();
+  // Sem suporte, o botão continua visível (desativado) com o motivo, para não parecer que sumiu.
   $('#ai-unsupported').hidden = !reason;
   $('#ai-unsupported').textContent = reason ? `IA indisponível: ${reason} A resposta rápida continua disponível.` : '';
-  $('#ai-go').hidden = !!reason;
-  $('.choice').style.gridTemplateColumns = reason ? '1fr' : '';
-  if (reason) return;
-  $('#ai-stop').hidden = !aiState.busy;
+  $('#ai-go').disabled = !!reason;
   const ready = aiState.engine || aiModelCached();
-  $('#ai-go').innerHTML = `✨ Gerar com IA<small>${ready ? 'no seu aparelho' : `baixa ~${(AI.downloadMB / 1000).toFixed(1).replace('.', ',')} GB na 1ª vez`}</small>`;
+  $('#ai-go').innerHTML = `✨ Gerar com IA<small>${reason ? 'indisponível neste navegador'
+    : ready ? 'no seu aparelho' : `baixa ~${(AI.downloadMB / 1000).toFixed(1).replace('.', ',')} GB na 1ª vez`}</small>`;
 }
 
 // Escolha entre resposta rápida (regras) e IA. Antes da escolha, nenhuma sugestão aparece.
