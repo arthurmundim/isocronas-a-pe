@@ -1065,7 +1065,7 @@ function writeHash() {
     const p = new URLSearchParams();
     if (state.point) {
       p.set('lat', state.point.lat.toFixed(5)); p.set('lng', state.point.lng.toFixed(5));
-      if (state.point.label) p.set('q', state.point.label);
+      if (state.point.label) p.set('q', state.point.label.split(' · ')[0]); // só o nome, para o link ficar curto
     }
     p.set('t', state.times.join(','));
     p.set('v', state.speed);
