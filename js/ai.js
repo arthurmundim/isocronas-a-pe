@@ -121,7 +121,8 @@ function aiMoments(f, n) {
   const endT = rel(C.hora);
   const merged = cand.filter((m) => {
     if (m === start || m === end) return true;
-    if (m.t <= 3 && m.kind !== 'evento' && start.onde === f.origem.nome) {
+    if (m.t <= 3 && m.kind === 'evento') { start.ver += `; ${m.ver.replace(/: a luz muda$/, ' bem na saída')}`; return false; }
+    if (m.t <= 3 && start.onde === f.origem.nome) {
       Object.assign(start, { kind: m.kind, onde: m.onde, ver: `${start.ver}; ${m.ver}`, camera: m.camera, scene: m.scene, cat: m.cat, phase: m.phase || start.phase });
       return false;
     }

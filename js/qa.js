@@ -52,6 +52,8 @@ function lightNow(m) {
   return `Sol a ${Math.round(s.alt)}° de altura, vindo de ${cardinal(s.az)}${t ? `; nesse trecho você anda para ${t.rumo}, então a luz fica como ${t.luz}` : ''}.`;
 }
 
+const isoHigh = (m) => isLowLight(m.phase) || parseInt(m.camera.iso, 10) >= 400;
+
 // ---- Banco de perguntas (ordem = prioridade) ----
 // applies: se faz sentido para o bloco; data: o que a IA pode usar; cam: configuração mostrada pelo app (opcional).
 const QA_BANK = [
@@ -62,9 +64,11 @@ const QA_BANK = [
     data: (m, c, cam) => `Do lado de fora vale a luz da rua (${m.phase}${c.blocked ? ', céu encoberto' : ''}). Configuração para a rua: ${camText(cam)}. Motivo técnico: ${cam.why}` },
   { id: 'compose', applies: () => true, text: () => 'Como enquadrar essa cena?',
     data: (m) => `O que observar: ${m.ver}. Dica de enquadramento: ${COMPOSE[m.kind] || COMPOSE[m.cat] || (isLowLight(m.phase) ? COMPOSE.evento : 'Escolha um primeiro plano e deixe a luz vir de lado para dar volume.')}` },
-  { id: 'iso_low', applies: () => true, cam: (m) => m.camera, text: (m) => (isLowLight(m.phase) ? 'Por que não dá para usar um ISO mais baixo aqui?' : 'Por que o ISO pode ficar baixo aqui?'),
-    data: (m) => (isLowLight(m.phase)
-      ? `Pouca luz (${m.phase}). ISO menor exigiria velocidade mais lenta (foto tremida ou gente borrada) ou mais abertura do que a lente costuma ter. Configuração: ${camText(m.camera)}. ${m.camera.why}`
+  // A pergunta segue o ISO real: alto (pouca luz ou céu fechado) ou baixo (luz farta).
+  { id: 'iso_low', applies: () => true, cam: (m) => m.camera,
+    text: (m) => (isoHigh(m) ? 'Por que não dá para usar um ISO mais baixo aqui?' : 'Por que o ISO pode ficar baixo aqui?'),
+    data: (m, c) => (isoHigh(m)
+      ? `Menos luz (${m.phase}${c.blocked ? ', céu encoberto' : ''}). ISO menor exigiria velocidade mais lenta (foto tremida ou gente borrada) ou mais abertura do que a lente costuma ter. Configuração: ${camText(m.camera)}. ${m.camera.why}`
       : `Há luz suficiente (${m.phase}): ISO baixo dá menos ruído e mais detalhe, e ainda sobra velocidade. Configuração: ${camText(m.camera)}. ${m.camera.why}`) },
   { id: 'inside', applies: (m) => ['cafe', 'worship', 'historic'].includes(m.cat), text: (m) => `E se eu entrar em ${m.onde}?`,
     cam: () => CAMERA.interior, data: (m, c, cam) => `Lá dentro a luz é artificial e bem mais fraca que a da rua. Configuração para o interior: ${camText(cam)}. Motivo técnico: ${cam.why}` },

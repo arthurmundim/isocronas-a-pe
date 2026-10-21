@@ -2,6 +2,12 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.6.1] - 2026-10-21
+
+### Corrigido
+- Evento de luz no horário da saída (ex.: pôr do sol às 18:15) virava um bloco separado com o mesmo horário; agora entra no bloco da saída ("pôr do sol bem na saída").
+- A pergunta sobre ISO segue o valor real: com céu fechado ou pouca luz pergunta "por que não dá para usar um ISO mais baixo", e não "por que o ISO pode ficar baixo".
+
 ## [0.6.0] - 2026-10-21
 
 ### Adicionado
@@ -118,6 +124,7 @@ Primeira versão funcional.
 - Layout responsivo: painel lateral vira bottom sheet no celular.
 - Cache em memória, filas com intervalo mínimo por API e fallback/backoff entre servidores Overpass.
 
+[0.6.1]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.6...v0.6.0
 [0.5.6]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.4...v0.5.5
