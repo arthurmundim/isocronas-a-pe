@@ -2,6 +2,11 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.5.1] - 2026-10-21
+
+### Corrigido
+- Etapas do painel apareciam sem estilo (botões "editar"/"abrir" crus) quando o navegador usava o `app.css` antigo do cache junto com o HTML novo. CSS e JS agora são carregados com versão no endereço (`?v=0.5.1`), trocada a cada release.
+
 ## [0.5.0] - 2026-10-21
 
 ### Alterado
@@ -66,6 +71,7 @@ Primeira versão funcional.
 - Layout responsivo: painel lateral vira bottom sheet no celular.
 - Cache em memória, filas com intervalo mínimo por API e fallback/backoff entre servidores Overpass.
 
+[0.5.1]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.2.0...v0.3.0

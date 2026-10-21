@@ -81,6 +81,7 @@ Todas as chamadas passam por um cache em memória (chave = URL + body). Erros de
 - Estado da exploração (lat/lng, tempos, filtros) serializado no hash da URL.
 - Commits pequenos em Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`), um por etapa testada.
 - `CHANGELOG.md` atualizado a cada versão; versões marcadas com tags `vX.Y.Z`.
+- **A cada versão, atualizar o `?v=X.Y.Z` de `css/app.css` e de todos os `js/*.js` no `index.html`.** O GitHub Pages serve com `Cache-Control: max-age=600`; sem isso o navegador mistura HTML novo com CSS/JS antigos (aconteceu na v0.5.0: etapas sem estilo).
 
 ## Roadmap
 
