@@ -6,7 +6,7 @@
 <title>Isócronas a pé</title>
 <meta name="description" content="Explore a pé: área alcançável caminhando, pontos para fotografar e luz do dia.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-<link rel="stylesheet" href="css/app.css?v=0.5.2">
+<link rel="stylesheet" href="css/app.css?v=0.5.3">
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
@@ -52,8 +52,23 @@
     </div>
   </section>
 
+  <!-- Depois do "Continuar" da Caminhada: aviso enquanto os pontos carregam no mapa. -->
   <section id="sec-dest" hidden>
-    <p class="dest-hint">👉 Clique numa rua colorida ou num ícone do mapa para escolher o destino.</p>
+    <p class="status loading" id="dest-wait">Carregando os pontos para fotografar no mapa…</p>
+    <button class="btn" id="dest-skip" type="button" hidden>Escolher o destino sem esperar</button>
+    <button class="btn" id="dest-skip" type="button" hidden>Escolher o destino sem esperar</button>
+  </section>
+
+  <section id="sec-poi" class="step" data-step="pois" hidden>
+    <button class="step-summary" type="button"><span class="txt"></span><span class="edit">abrir</span></button>
+    <div class="step-body">
+      <h2>Pontos para fotografar</h2>
+      <p class="dest-hint" id="dest-hint">👉 Clique numa rua colorida ou num ícone do mapa para escolher o destino.</p>
+      <p class="status" id="poi-summary"></p>
+      <div id="poi-list"></div>
+      <p class="status" id="poi-status"></p>
+      <button class="btn" id="poi-retry" type="button" hidden>Tentar de novo</button>
+    </div>
   </section>
 
   <section id="sec-route" hidden>
@@ -67,7 +82,7 @@
         <button class="step-summary" type="button"><span class="txt"></span><span class="edit">editar</span></button>
         <div class="step-body">
           <h2 class="tips-title">Quando?</h2>
-          <div class="row"><label for="trip-date">Dia</label><input id="trip-date" type="date" style="flex:1.4"></div>
+          <div class="row"><label for="date">Dia</label><input id="date" type="date" style="flex:1.4"></div>
           <div class="row">
             <div class="seg seg-2" id="trip-mode" role="radiogroup" aria-label="Sair ou chegar">
               <button type="button" role="radio" data-mode="leave">Sair às</button>
@@ -76,6 +91,12 @@
             <input type="time" id="trip-time" aria-label="Horário">
           </div>
           <div class="chips" id="trip-quick" aria-label="Atalhos de horário"></div>
+          <h2 class="tips-title">Luz para foto</h2>
+          <table class="sun" id="sun-table"></table>
+          <p class="hint" id="sun-tz"></p>
+          <div class="field-label">Nuvens nas golden hours</div>
+          <table class="sun" id="cloud-table"></table>
+          <p class="status" id="cloud-status"></p>
           <button class="btn btn-primary step-next" data-next="when" type="button">Continuar</button>
         </div>
       </div>
@@ -123,47 +144,24 @@
     </div>
   </section>
 
-  <section id="sec-poi" class="step" data-step="pois" hidden>
-    <button class="step-summary" type="button"><span class="txt"></span><span class="edit">abrir</span></button>
-    <div class="step-body">
-      <h2>Pontos para fotografar</h2>
-      <p class="status" id="poi-summary"></p>
-      <div id="poi-list"></div>
-      <p class="status" id="poi-status"></p>
-      <button class="btn" id="poi-retry" type="button" hidden>Tentar de novo</button>
-    </div>
-  </section>
-
-  <section id="sec-light" class="step" data-step="light" hidden>
-    <button class="step-summary" type="button"><span class="txt"></span><span class="edit">abrir</span></button>
-    <div class="step-body">
-      <h2>Luz para foto</h2>
-      <div class="row"><label for="date">Dia</label><input id="date" type="date" style="flex:1.3"></div>
-      <table class="sun" id="sun-table"></table>
-      <p class="hint" id="sun-tz"></p>
-      <h2 style="margin-top:12px">Nuvens nas golden hours</h2>
-      <table class="sun" id="cloud-table"></table>
-      <p class="status" id="cloud-status"></p>
-    </div>
-  </section>
 </aside>
 <div id="map"></div>
 <div id="toasts" aria-live="polite"></div>
 <div id="busy" role="progressbar" aria-label="Carregando"></div>
 
-<script src="js/config.js?v=0.5.2"></script>
-<script src="js/util.js?v=0.5.2"></script>
-<script src="js/url.js?v=0.5.2"></script>
-<script src="js/map.js?v=0.5.2"></script>
-<script src="js/search.js?v=0.5.2"></script>
-<script src="js/iso.js?v=0.5.2"></script>
-<script src="js/route.js?v=0.5.2"></script>
-<script src="js/pois.js?v=0.5.2"></script>
-<script src="js/light.js?v=0.5.2"></script>
-<script src="js/trip.js?v=0.5.2"></script>
-<script src="js/tips.js?v=0.5.2"></script>
-<script src="js/ai.js?v=0.5.2"></script>
-<script src="js/flow.js?v=0.5.2"></script>
-<script src="js/main.js?v=0.5.2"></script>
+<script src="js/config.js?v=0.5.3"></script>
+<script src="js/util.js?v=0.5.3"></script>
+<script src="js/url.js?v=0.5.3"></script>
+<script src="js/map.js?v=0.5.3"></script>
+<script src="js/search.js?v=0.5.3"></script>
+<script src="js/iso.js?v=0.5.3"></script>
+<script src="js/route.js?v=0.5.3"></script>
+<script src="js/pois.js?v=0.5.3"></script>
+<script src="js/light.js?v=0.5.3"></script>
+<script src="js/trip.js?v=0.5.3"></script>
+<script src="js/tips.js?v=0.5.3"></script>
+<script src="js/ai.js?v=0.5.3"></script>
+<script src="js/flow.js?v=0.5.3"></script>
+<script src="js/main.js?v=0.5.3"></script>
 </body>
 </html>

@@ -62,7 +62,7 @@ async function loadPois() {
   try {
     const elements = await fetchPoiElements(turf.bbox(outer), {
       isStale: () => seq !== poiSeq,
-      onRetry: (msg) => seq === poiSeq && setStatus('poi-status', msg, 'loading'),
+      onRetry: (msg) => { if (seq === poiSeq) { setStatus('poi-status', msg, 'loading'); setStatus('dest-wait', msg, 'loading'); } },
     });
     if (seq !== poiSeq) return;
     const seen = new Set();
@@ -82,6 +82,7 @@ async function loadPois() {
   poiLoading = false;
   if (state.trip) renderTrip(); // pontos no caminho entram nas dicas
   renderPois();
+  flowPoisLoaded(); // a etapa de destino só abre com os pontos no mapa
 }
 let poiError = false, poiLoading = false;
 function clearPois() {

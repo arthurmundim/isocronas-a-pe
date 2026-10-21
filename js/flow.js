@@ -1,19 +1,12 @@
 'use strict';
 // ==== FLUXO EM ETAPAS ====
-// search → walk → (destino no mapa) → when → styles → suggest. Concluir uma etapa a minimiza numa linha de resumo
-// clicável (reabre para editar) e abre a próxima. "pois" e "light" ficam fora do fluxo: aparecem com o ponto,
-// minimizam quando há rota (os dados deles seguem nas sugestões/prompt) e reabrem quando a rota é limpa.
+// search → walk → pois (aparece só depois que os pontos carregam no mapa; ali se escolhe o destino) → when (data, hora
+// e luz/nuvens do dia) → styles → suggest. Concluir uma etapa a minimiza numa linha de resumo clicável (reabre para
+// editar) e abre a próxima; etapas futuras ficam ocultas.
 const stepEl = (n) => document.querySelector(`.step[data-step="${n}"]`);
 const fmtDay = (d) => d.split('-').reverse().slice(0, 2).join('/');
 const fmtNum = (x) => String(x).replace('.', ',');
 
-function lightSummary() {
-  const a = lightAnchor();
-  if (!a) return '☀️ Luz para foto';
-  const s = sunTimes(state.date, a.lat, a.lng);
-  const c = cloudsBetween(s.goldenHour, s.sunset);
-  return `☀️ ${fmtDay(state.date)} · golden ${fmtTime(s.goldenHour)} · pôr do sol ${fmtTime(s.sunset)}${c ? ` · nuvens ${c.total}%` : ''}`;
-}
 const STEP_SUMMARY = {
   search: () => `📍 ${esc(state.point?.label?.split(' · ')[0] || (state.point ? `${state.point.lat.toFixed(4)}, ${state.point.lng.toFixed(4)}` : 'escolha um ponto'))}`,
   walk: () => `🚶 até ${state.times.join('/')} min · ${paceOf(state.speed).label} (${fmtNum(state.speed)} km/h)${state.hills > 0.5 ? ' · evitando ladeiras' : ''}`,
@@ -24,7 +17,6 @@ const STEP_SUMMARY = {
   styles: () => `📷 ${esc(PHOTO_STYLES.filter((s) => state.styles.has(s.id)).map((s) => s.label).join(', ') || 'sem preferência de estilo')}`,
   suggest: () => `${aiState.mode === 'ai' ? '✨ Texto com IA' : '⚡ Resposta rápida'} · ${AI.sizes[aiState.size].label}`,
   pois: () => (poiLoading ? '📸 Pontos para fotografar: carregando…' : `📸 ${state.pois.length} pontos para fotografar na área`),
-  light: lightSummary,
 };
 
 function refreshSummary(n) {
@@ -53,10 +45,11 @@ function hideStep(n) {
 
 // "Continuar" de cada etapa.
 const NEXT_STEP = { when: 'styles', styles: 'suggest' };
+let awaitingPois = false; // Caminhada concluída, esperando os pontos carregarem para abrir a etapa de destino
 function completeStep(n) {
   collapseStep(n);
   if (n === 'walk') {
-    if (!state.routeTarget) { $('#sec-dest').hidden = false; reveal('#sec-dest'); }
+    if (!state.routeTarget) showPoisStep();
     return;
   }
   const next = NEXT_STEP[n];
@@ -64,28 +57,51 @@ function completeStep(n) {
   if (stepEl(next).hidden) openStep(next);
   reveal(stepEl(next));
 }
+// Abre "Pontos para fotografar" (onde se escolhe o destino) só quando os pontos já estão no mapa.
+// O Overpass às vezes leva mais de 1 min: depois de 10 s dá para seguir sem esperar (force).
+let skipTimer;
+function showPoisStep(force = false) {
+  const loading = !force && (poiLoading || !state.iso);
+  awaitingPois = loading;
+  $('#sec-dest').hidden = !loading;
+  clearTimeout(skipTimer);
+  $('#dest-skip').hidden = true;
+  if (loading) {
+    setStatus('dest-wait', 'Carregando os pontos para fotografar no mapa…', 'loading');
+    skipTimer = setTimeout(() => { $('#dest-skip').hidden = !awaitingPois; }, 10000);
+    reveal('#sec-dest');
+    return;
+  }
+  $('#dest-hint').hidden = false;
+  openStep('pois');
+  reveal(stepEl('pois'));
+}
+$('#dest-skip').addEventListener('click', () => showPoisStep(true));
+// Chamado quando o Overpass termina (com ou sem erro).
+function flowPoisLoaded() {
+  if (awaitingPois && !state.routeTarget) showPoisStep();
+}
 
 // ---- Eventos do fluxo ----
 function flowNewPoint() {
   collapseStep('search');
   openStep('walk');
+  awaitingPois = false;
   $('#sec-dest').hidden = true;
-  openStep('pois');
-  openStep('light');
+  hideStep('pois');
 }
 function flowRouteStart() {
   collapseStep('walk');
+  awaitingPois = false;
   $('#sec-dest').hidden = true;
+  $('#dest-hint').hidden = true;
   collapseStep('pois');
-  collapseStep('light');
   openStep('when');
   hideStep('styles');
   hideStep('suggest');
 }
 function flowRouteCleared() {
-  openStep('pois');
-  openStep('light');
-  if (stepEl('walk').classList.contains('collapsed')) $('#sec-dest').hidden = false;
+  if (stepEl('walk').classList.contains('collapsed')) showPoisStep();
 }
 
 document.querySelectorAll('.step-summary').forEach((b) => b.addEventListener('click', () => openStep(b.closest('.step').dataset.step)));

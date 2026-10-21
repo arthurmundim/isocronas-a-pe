@@ -16,7 +16,6 @@ const compass = (deg) => ['N', 'NE', 'L', 'SE', 'S', 'SO', 'O', 'NO'][Math.round
 function updateLight() {
   if (!state.date) state.date = todayStr();
   $('#date').value = state.date;
-  $('#trip-date').value = state.date;
   if (!state.point) { $('#sun-table').innerHTML = ''; $('#sun-tz').textContent = 'Escolha um ponto.'; return; }
   const { lat, lng } = lightAnchor();
   const t = sunTimes(state.date, lat, lng);
@@ -69,7 +68,7 @@ function drawSunLines() {
   setSourceData('sun', { type: 'FeatureCollection', features });
 }
 
-// O dia aparece em dois lugares (Luz para foto e "Quando?"); os dois editam o mesmo state.date.
+// Dia da caminhada (fica no "Quando?"): muda horários de luz, nuvens e a viagem.
 const onDateInput = (e) => {
   state.date = e.target.value || todayStr();
   updateLight();
@@ -77,7 +76,6 @@ const onDateInput = (e) => {
   onStateChanged();
 };
 $('#date').addEventListener('change', onDateInput);
-$('#trip-date').addEventListener('change', onDateInput);
 
 // ==== NUVENS NAS GOLDEN HOURS (OPEN-METEO) ====
 let cloudSeq = 0;

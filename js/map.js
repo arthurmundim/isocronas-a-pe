@@ -90,6 +90,7 @@ function setPoint(lat, lng, label = null, { fly = true, show = true } = {}) {
 function onPointChanged() {
   clearRoute();
   clearPois();
+  state.iso = null; // a mancha do ponto anterior não vale mais (evita abrir a etapa de pontos com dados velhos)
   poiPopup?.remove();
   computeIsochrones();
   updateLight();
