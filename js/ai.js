@@ -75,37 +75,46 @@ function aiMoments(f, n) {
   const cand = [];
   const add = (m) => cand.push({ ...m, t: m.fim ? 99999 : rel(m.hora) });
 
-  add({ hora: S.hora, onde: f.origem.nome, prio: 1000, inicio: true,
+  // Fase da luz num horário da caminhada, pelo trecho em andamento (para POIs e trechos).
+  const phaseAtTime = (h) => {
+    const t = f.trechos.filter((x) => rel(x.inicio) <= rel(h)).at(-1);
+    return t ? lightPhase(t.altitude_sol) : C.fase;
+  };
+  add({ hora: S.hora, onde: f.origem.nome, prio: 1000, inicio: true, phase: S.fase,
     ver: `saída com luz de ${S.fase}`, camera: cameraForPhase(S.fase, blocked) });
   const next = f.luz.proximo_evento;
   const sky = !f.nuvens ? '' : blocked ? `; céu ${f.nuvens.total_pct}% encoberto, luz difusa`
     : f.nuvens.altas_pct >= 40 && f.nuvens.baixas_pct < 40 ? '; nuvens altas que podem pegar cor' : '';
-  add({ hora: C.hora, onde: f.destino.nome, prio: 1000, fim: true,
+  add({ hora: C.hora, onde: f.destino.nome, prio: 1000, fim: true, phase: C.fase, cat: f._destCat, scene: CAT_IDEA[f._destCat]?.[1],
     ver: `você chega ${phaseAt(C.fase)}${next ? `; ${next.evento} ${next.minutos_apos_chegada} min depois (${next.hora})` : ''}${sky}`,
     camera: cameraForPhase(C.fase, blocked) });
 
   // Onde você estará num horário: a rua (nomeada) do trecho em andamento, nunca um vago "no caminho".
   const streetAtTime = (h) => f.trechos.filter((t) => !t.rua.startsWith('calçada') && rel(t.inicio) <= rel(h)).at(-1)?.rua || f.destino.nome;
-  for (const e of f.luz.eventos_durante) add({ kind: 'evento', hora: e.hora, onde: streetAtTime(e.hora), prio: 88, ver: `${e.evento}: a luz muda`,
+  for (const e of f.luz.eventos_durante) add({ kind: 'evento', hora: e.hora, onde: streetAtTime(e.hora), prio: 88, ver: `${e.evento}: a luz muda`, phase: /blue/.test(e.evento) ? 'blue hour' : 'golden hour',
     camera: cameraForPhase(/blue/.test(e.evento) ? 'blue hour' : 'golden hour', blocked) });
 
   if (!blocked) {
     const seen = new Set();
     for (const t of f.trechos) {
       if (seen.has(t.rua) || t.rua.startsWith('calçada') || t.altitude_sol <= -1) continue;
-      if (t.corredor_de_luz) add({ kind: 'corredor', hora: t.inicio, onde: t.rua, prio: 92, ver: 'a rua fica alinhada com o sol baixo e a luz atravessa a rua inteira', camera: CAMERA['sol baixo'] });
-      else if (t.luz.startsWith('contraluz') && t.altitude_sol < 25) add({ kind: 'contraluz', hora: t.inicio, onde: t.rua, prio: likes(['street', 'retrato', 'minimal']) ? 86 : 72,
+      const ph = lightPhase(t.altitude_sol);
+      if (t.corredor_de_luz) add({ kind: 'corredor', hora: t.inicio, onde: t.rua, prio: 92, phase: ph, ver: 'a rua fica alinhada com o sol baixo e a luz atravessa a rua inteira', camera: CAMERA['sol baixo'] });
+      else if (t.luz.startsWith('contraluz') && t.altitude_sol < 25) add({ kind: 'contraluz', hora: t.inicio, onde: t.rua, prio: likes(['street', 'retrato', 'minimal']) ? 86 : 72, phase: ph,
         ver: styles.has('retrato') ? 'você anda contra o sol: contorno de luz no cabelo de quem estiver de costas para ele' : 'você anda contra o sol: silhuetas de quem passa e reflexos no chão',
         camera: styles.has('retrato') ? CAMERA['contraluz retrato'] : CAMERA.contraluz });
-      else if (t.fachadas_iluminadas && t.altitude_sol > 0 && t.altitude_sol < 25) add({ kind: 'fachadas', hora: t.inicio, onde: t.rua, prio: likes(['arquitetura']) ? 86 : 70,
-        ver: `fachadas do ${t.fachadas_iluminadas} com luz quente vindo de lado`, camera: CAMERA.arquitetura });
+      else if (t.fachadas_iluminadas && t.altitude_sol > 0 && t.altitude_sol < 25) add({ kind: 'fachadas', hora: t.inicio, onde: t.rua, prio: likes(['arquitetura']) ? 86 : 70, phase: ph, scene: 'arquitetura',
+        ver: `fachadas do ${t.fachadas_iluminadas} com luz quente vindo de lado`, camera: cameraForScene('arquitetura', ph, blocked) });
       else continue;
       seen.add(t.rua);
     }
   }
   for (const p of f._pontos) {
     const [idea, cam] = CAT_IDEA[p.cat] || ['um ponto interessante', 'street'];
-    add({ hora: p.hora_aprox, onde: p.nome, prio: likes(CAT_STYLES[p.cat] || []) ? 84 : 66, ver: idea, camera: CAMERA[cam] });
+    const ph = phaseAtTime(p.hora_aprox);
+    // Cena de retrato só para quem marcou retrato; sem isso, o parque segue a luz do momento.
+    const scene = cam === 'retrato sombra' && !styles.has('retrato') ? null : cam;
+    add({ hora: p.hora_aprox, onde: p.nome, prio: likes(CAT_STYLES[p.cat] || []) ? 84 : 66, ver: idea, phase: ph, scene, cat: p.cat, camera: cameraForScene(scene, ph, blocked) });
   }
   // Momentos colados na saída ou na chegada (≤ 3 min) viram parte delas, para não repetir horário.
   const start = cand.find((m) => m.inicio), end = cand.find((m) => m.fim);
@@ -113,10 +122,14 @@ function aiMoments(f, n) {
   const merged = cand.filter((m) => {
     if (m === start || m === end) return true;
     if (m.t <= 3 && m.kind !== 'evento' && start.onde === f.origem.nome) {
-      Object.assign(start, { kind: m.kind, onde: m.onde, ver: `${start.ver}; ${m.ver}`, camera: m.camera });
+      Object.assign(start, { kind: m.kind, onde: m.onde, ver: `${start.ver}; ${m.ver}`, camera: m.camera, scene: m.scene, cat: m.cat, phase: m.phase || start.phase });
       return false;
     }
-    if (endT - m.t <= 3) { end.ver += `; ${m.ver.replace(/: a luz muda$/, ' bem na chegada')}`; return false; }
+    if (endT - m.t <= 3) {
+      // Evento de luz vira "bem na chegada"; lugar próximo mantém o nome (senão "igreja" aparecia no bloco do café).
+      end.ver += m.kind === 'evento' ? `; ${m.ver.replace(/: a luz muda$/, ' bem na chegada')}` : `; logo antes, ${m.onde}: ${m.ver}`;
+      return false;
+    }
     return true;
   });
   // Saída e chegada sempre; o resto por prioridade, sem repetir lugar; depois em ordem de tempo.
@@ -273,7 +286,7 @@ function renderAiOut(text, done, moments) {
     const body = said ? esc(said) : done ? `${esc(m.ver[0].toUpperCase() + m.ver.slice(1))}.` : '';
     return `<div class="ai-moment"><div class="ai-when">${esc(m.hora)} · ${esc(m.onde)}</div>
       <p>${body}${typing ? '<span class="ai-caret"></span>' : ''}</p>
-      ${!typing || done ? `<p class="ai-cam">📷 ${esc(camText(m.camera))}</p><p class="ai-why"><b>Por quê:</b> ${esc(m.camera.why)}</p>` : ''}</div>`;
+      ${!typing || done ? `<p class="ai-cam">📷 ${esc(camText(m.camera))}</p><p class="ai-why"><b>Por quê:</b> ${esc(m.camera.why)}</p>` : ''}${done ? qaBlockHtml(i) : ''}</div>`;
   }).join('');
 }
 async function renderAiControls() {
@@ -308,11 +321,13 @@ function resetSuggest() {
   if (aiState.busy) aiState.engine?.interruptGenerate();
   $('#ai-out').innerHTML = '';
   setStatus('ai-status', '');
+  qaReset();
   setSuggestMode(null);
 }
 
 async function aiGenerate() {
   if (aiState.busy) { aiState.engine?.interruptGenerate(); return; }
+  if (qaState.busy) return; // uma requisição por vez no motor
   const f = buildFacts();
   if (!f) return;
   setSuggestMode('ai');
@@ -320,6 +335,7 @@ async function aiGenerate() {
   aiState.busy = true;
   const moments = aiMoments(f, AI.sizes[aiState.size].moments);
   aiState.factsKey = momentsText(moments);
+  qaReset(moments, f); // perguntas por bloco recomeçam a cada texto gerado
   renderAiControls();
   $('#ai-stale').hidden = true;
   $('#ai-out').innerHTML = '';
