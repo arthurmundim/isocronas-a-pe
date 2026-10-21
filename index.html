@@ -61,6 +61,12 @@ input[type="range"] { flex: 1.3; accent-color: var(--accent); }
 #suggestions li small { color: var(--muted); display: block; }
 #suggestions li.active, #suggestions li:hover { background: var(--bg-2); }
 
+/* ==== ISÓCRONAS / ROTA ==== */
+#legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; font-size: 12.5px; }
+#legend span { display: inline-flex; align-items: center; gap: 5px; }
+#legend i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; opacity: .85; }
+#elev { width: 100%; height: 120px; display: block; margin-top: 6px; }
+
 /* ==== CONTROLES DO MAPA ==== */
 .maplibregl-ctrl-group button.map-btn { width: auto; white-space: nowrap; background: var(--bg); color: var(--fg); padding: 0 10px; font-size: 13px; }
 .maplibregl-ctrl-group { background: var(--bg); }
@@ -108,6 +114,22 @@ input[type="range"] { flex: 1.3; accent-color: var(--accent); }
     <p class="status" id="search-status"></p>
     <p class="hint">Ou clique no mapa / arraste o pin. Clique direito sempre move o pin.</p>
   </section>
+
+  <section id="sec-iso">
+    <h2>Caminhada</h2>
+    <div class="row"><label for="times">Anéis (min)</label><input id="times" type="text" value="5, 10, 15, 20" style="flex:1.3" inputmode="numeric" title="Até 4 valores entre 1 e 60"></div>
+    <div class="row"><label for="speed">Velocidade <b id="speed-val">5 km/h</b></label><input id="speed" type="range" min="2" max="7" step="0.5" value="5"></div>
+    <div class="row"><label for="hills">Evitar ladeiras <b id="hills-val">0.5</b></label><input id="hills" type="range" min="0" max="1" step="0.1" value="0.5"></div>
+    <div id="legend"></div>
+    <p class="status" id="iso-status">Escolha um ponto para calcular.</p>
+  </section>
+
+  <section id="sec-route" hidden>
+    <h2>Rota a pé</h2>
+    <div class="row"><span id="route-summary" style="flex:1"></span><button class="btn" id="route-clear" type="button">Limpar</button></div>
+    <canvas id="elev" height="120" aria-label="Perfil de elevação"></canvas>
+    <p class="status" id="route-status"></p>
+  </section>
 </aside>
 <div id="map"></div>
 <div id="toasts" aria-live="polite"></div>
@@ -123,6 +145,8 @@ const CONFIG = {
   },
   defaultCenter: [-46.6559, -23.5614], // Av. Paulista (lng, lat)
   defaultZoom: 13,
+  valhalla: 'https://valhalla1.openstreetmap.de',
+  ringColors: ['#1a9850', '#91cf60', '#fee08b', '#fc8d59', '#d73027'],
   photon: 'https://photon.komoot.io/api/',
   brasilApiCep: 'https://brasilapi.com.br/api/cep/v2/',
   nominatim: 'https://nominatim.openstreetmap.org/search',
@@ -132,6 +156,11 @@ const CONFIG = {
 const state = {
   point: null,          // { lat, lng, label }
   style: 'light',
+  times: [5, 10, 15, 20],
+  speed: 5,             // km/h
+  hills: 0.5,           // use_hills do Valhalla (0 = indiferente, 1 = evita ladeiras)
+  iso: null,            // FeatureCollection das isócronas (maior primeiro)
+  routeTarget: null,    // { lat, lng }
 };
 
 // ==== UTILITÁRIOS ====
@@ -183,6 +212,7 @@ function limiter(minIntervalMs) {
 }
 const limits = {
   nominatim: limiter(1100),
+  valhalla: limiter(400),
 };
 
 async function fetchJSON(api, url, opts = {}, timeoutMs = 30000) {
@@ -197,7 +227,9 @@ async function fetchJSON(api, url, opts = {}, timeoutMs = 30000) {
   let body = null;
   try { body = await res.json(); } catch { /* corpo não-JSON */ }
   if (!res.ok) {
-    const detail = body?.error || body?.message || '';
+    let detail = String(body?.error || body?.message || '');
+    if (/edges|location/i.test(detail)) detail = 'nenhuma rua caminhável perto desse ponto';
+    else if (detail.length > 90) detail = detail.slice(0, 90) + '…';
     const msg = res.status === 429 ? `${api}: muitas requisições, tente em instantes`
       : res.status >= 500 ? `${api}: servidor indisponível (${res.status})`
       : `${api}: erro ${res.status}${detail ? ' – ' + detail : ''}`;
@@ -268,7 +300,12 @@ function onStateChanged() { /* estado na URL: seção final */ }
 const pin = new maplibregl.Marker({ color: '#e5484d', draggable: true });
 pin.on('dragend', () => { const { lng, lat } = pin.getLngLat(); setPoint(lat, lng, null, { fly: false }); });
 
-map.on('click', (e) => setPoint(e.lngLat.lat, e.lngLat.lng, null, { fly: false }));
+// Clique dentro da mancha = rota até lá; fora = novo ponto. Clique direito sempre move o pin.
+map.on('click', (e) => {
+  const { lat, lng } = e.lngLat;
+  if (insideIsochrone(lng, lat)) showRoute(lat, lng);
+  else setPoint(lat, lng, null, { fly: false });
+});
 map.on('contextmenu', (e) => setPoint(e.lngLat.lat, e.lngLat.lng, null, { fly: false }));
 
 // ==== PONTO DE PARTIDA ====
@@ -279,7 +316,11 @@ function setPoint(lat, lng, label = null, { fly = true } = {}) {
   setStatus('search-status', label ? `📍 ${label}` : `📍 ${state.point.lat.toFixed(5)}, ${state.point.lng.toFixed(5)}`);
   onPointChanged();
 }
-function onPointChanged() { /* preenchido nas próximas seções */ }
+function onPointChanged() {
+  clearRoute();
+  computeIsochrones();
+  onStateChanged();
+}
 
 // ==== BUSCA: CEP (BrasilAPI → Nominatim) ====
 const isCep = (q) => /^\d{5}-?\d{3}$/.test(q.trim());
@@ -394,6 +435,212 @@ $('#suggestions').addEventListener('mousedown', (e) => {
 });
 $('#search').addEventListener('blur', () => setTimeout(() => { suggestions = []; renderSuggestions(); }, 150));
 
+// ==== VALHALLA ====
+function valhalla(path, body) {
+  const json = JSON.stringify(body);
+  return cached(path + json, () => limits.valhalla(() => fetchJSON('Valhalla', CONFIG.valhalla + path, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: json,
+  })));
+}
+const pedestrianCosting = () => ({ pedestrian: { walking_speed: state.speed, use_hills: state.hills } });
+
+// Decodifica polyline com precisão 6 (formato do Valhalla) → [[lng, lat], ...]
+function decodePolyline6(str) {
+  const coords = [];
+  let i = 0, lat = 0, lng = 0;
+  while (i < str.length) {
+    for (const axis of [0, 1]) {
+      let shift = 0, result = 0, b;
+      do { b = str.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+      const d = result & 1 ? ~(result >> 1) : result >> 1;
+      if (axis === 0) lat += d; else lng += d;
+    }
+    coords.push([lng / 1e6, lat / 1e6]);
+  }
+  return coords;
+}
+function fmtDuration(sec) {
+  const m = Math.round(sec / 60);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
+}
+
+// ==== ISÓCRONAS ====
+function ringColor(i, n) {
+  const ramp = CONFIG.ringColors;
+  return ramp[n === 1 ? 0 : Math.round((i * (ramp.length - 1)) / (n - 1))];
+}
+// No celular o bottom sheet cobre a parte de baixo do mapa.
+const isMobile = () => matchMedia('(max-width: 760px)').matches;
+const mapPadding = () => (isMobile() ? { top: 50, left: 30, right: 50, bottom: $('#panel').offsetHeight + 20 } : 40);
+const firstSymbolLayer = () => map.getStyle().layers.find((l) => l.type === 'symbol')?.id;
+
+registerOverlay(() => {
+  ensureSource('iso');
+  const before = firstSymbolLayer();
+  map.addLayer({ id: 'iso-fill', type: 'fill', source: 'iso', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.2 } }, before);
+  map.addLayer({ id: 'iso-line', type: 'line', source: 'iso', paint: { 'line-color': ['get', 'color'], 'line-width': 2, 'line-opacity': 0.9 } }, before);
+});
+
+function parseTimes(text) {
+  const vals = [...new Set(String(text).split(/[^\d]+/).map(Number).filter((n) => n >= 1 && n <= 60))].sort((a, b) => a - b);
+  return vals.slice(0, 4);
+}
+function renderLegend() {
+  const n = state.times.length;
+  $('#legend').innerHTML = state.times.map((t, i) => `<span><i style="background:${ringColor(i, n)}"></i>até ${t} min</span>`).join('');
+}
+
+let isoSeq = 0;
+async function computeIsochrones() {
+  renderLegend();
+  if (!state.point) return;
+  const seq = ++isoSeq;
+  const { lat, lng } = state.point;
+  setStatus('iso-status', 'Calculando área alcançável…');
+  try {
+    const data = await valhalla('/isochrone', {
+      locations: [{ lat, lon: lng }],
+      costing: 'pedestrian',
+      costing_options: pedestrianCosting(),
+      contours: state.times.map((time) => ({ time })),
+      polygons: true, denoise: 0.3, generalize: 15,
+    });
+    if (seq !== isoSeq) return;
+    const n = state.times.length;
+    const features = data.features
+      .filter((f) => /Polygon/.test(f.geometry?.type))
+      .map((f) => ({ ...f, properties: { contour: f.properties.contour, color: ringColor(state.times.indexOf(f.properties.contour), n) } }))
+      .sort((a, b) => b.properties.contour - a.properties.contour);
+    state.iso = { type: 'FeatureCollection', features };
+    setSourceData('iso', state.iso);
+    const km2 = features.length ? (turf.area(features[0]) / 1e6).toFixed(2) : 0;
+    setStatus('iso-status', `Em ${state.times.at(-1)} min a ${state.speed} km/h: ~${km2} km². Clique na mancha para ver a rota.`);
+    if (features.length) map.fitBounds(turf.bbox(features[0]), { padding: mapPadding(), maxZoom: 16, duration: 600 });
+    onIsochronesChanged();
+  } catch (e) {
+    if (seq !== isoSeq) return;
+    state.iso = null;
+    setSourceData('iso', EMPTY);
+    setStatus('iso-status', e.message, true);
+    toast('Isócronas: ' + e.message);
+  }
+}
+function onIsochronesChanged() { /* pontos para fotografar: próxima seção */ }
+
+function insideIsochrone(lng, lat) {
+  const outer = state.iso?.features[0];
+  return !!outer && turf.booleanPointInPolygon([lng, lat], outer);
+}
+// Menor anel (em minutos) que contém o ponto, ou null.
+function ringOf(lng, lat) {
+  const fs = state.iso?.features || [];
+  for (let i = fs.length - 1; i >= 0; i--) if (turf.booleanPointInPolygon([lng, lat], fs[i])) return fs[i].properties.contour;
+  return null;
+}
+
+const recomputeIso = debounce(() => {
+  computeIsochrones();
+  if (state.routeTarget) showRoute(state.routeTarget.lat, state.routeTarget.lng);
+  onStateChanged();
+}, 500);
+$('#times').addEventListener('change', (e) => {
+  const t = parseTimes(e.target.value);
+  if (t.length) state.times = t;
+  e.target.value = state.times.join(', ');
+  recomputeIso();
+});
+$('#speed').addEventListener('input', (e) => { state.speed = +e.target.value; $('#speed-val').textContent = `${state.speed} km/h`; recomputeIso(); });
+$('#hills').addEventListener('input', (e) => { state.hills = +e.target.value; $('#hills-val').textContent = state.hills.toFixed(1); recomputeIso(); });
+
+// ==== ROTA + PERFIL DE ELEVAÇÃO ====
+registerOverlay(() => {
+  ensureSource('route');
+  map.addLayer({ id: 'route-casing', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 7, 'line-opacity': 0.8 } });
+  map.addLayer({ id: 'route-line', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#2563eb', 'line-width': 4 } });
+  map.addLayer({ id: 'route-end', type: 'circle', source: 'route', filter: ['==', '$type', 'Point'],
+    paint: { 'circle-radius': 6, 'circle-color': '#2563eb', 'circle-stroke-color': '#fff', 'circle-stroke-width': 2 } });
+});
+
+let routeSeq = 0;
+async function showRoute(lat, lng) {
+  if (!state.point) return;
+  const seq = ++routeSeq;
+  state.routeTarget = { lat, lng };
+  $('#sec-route').hidden = false;
+  $('#route-summary').textContent = '';
+  drawElevation([]);
+  setStatus('route-status', 'Calculando rota…');
+  setSourceData('route', { type: 'FeatureCollection', features: [turf.point([lng, lat])] });
+  try {
+    const data = await valhalla('/route', {
+      locations: [{ lat: state.point.lat, lon: state.point.lng }, { lat: round(lat), lon: round(lng) }],
+      costing: 'pedestrian', costing_options: pedestrianCosting(),
+      directions_options: { units: 'kilometers', language: 'pt-BR' },
+    });
+    if (seq !== routeSeq) return;
+    const leg = data.trip.legs[0];
+    const line = turf.lineString(decodePolyline6(leg.shape));
+    setSourceData('route', { type: 'FeatureCollection', features: [line, turf.point([lng, lat])] });
+    const { time, length } = data.trip.summary;
+    $('#route-summary').innerHTML = `<b>${fmtDuration(time)}</b> · ${length.toFixed(2)} km`;
+    setStatus('route-status', 'Carregando elevação…');
+    const h = await valhalla('/height', { encoded_polyline: leg.shape, shape_format: 'polyline6', range: true, resample_distance: Math.max(10, Math.round(length * 1000 / 200)) });
+    if (seq !== routeSeq) return;
+    const pts = (h.range_height || []).filter((p) => p[1] != null);
+    const { gain, loss } = drawElevation(pts);
+    $('#route-summary').innerHTML += ` · ↑${gain} m ↓${loss} m`;
+    setStatus('route-status', '');
+  } catch (e) {
+    if (seq !== routeSeq) return;
+    setStatus('route-status', e.message, true);
+  }
+}
+function clearRoute() {
+  routeSeq++;
+  state.routeTarget = null;
+  setSourceData('route', EMPTY);
+  $('#sec-route').hidden = true;
+}
+$('#route-clear').addEventListener('click', clearRoute);
+
+function drawElevation(pts) {
+  const cv = $('#elev'), dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+  if (pts.length < 2) return { gain: 0, loss: 0 };
+  const css = getComputedStyle(document.documentElement);
+  const [fg, muted, accent] = ['--fg', '--muted', '--accent'].map((v) => css.getPropertyValue(v).trim());
+  const dists = pts.map((p) => p[0]), elevs = pts.map((p) => p[1]);
+  const maxD = dists.at(-1) || 1;
+  let minE = Math.min(...elevs), maxE = Math.max(...elevs);
+  if (maxE - minE < 10) { const mid = (maxE + minE) / 2; minE = mid - 5; maxE = mid + 5; }
+  const pad = { l: 34, r: 6, t: 8, b: 18 };
+  const x = (d) => pad.l + (d / maxD) * (W - pad.l - pad.r);
+  const y = (e) => pad.t + (1 - (e - minE) / (maxE - minE)) * (H - pad.t - pad.b);
+  ctx.beginPath();
+  pts.forEach(([d, e], i) => (i ? ctx.lineTo(x(d), y(e)) : ctx.moveTo(x(d), y(e))));
+  ctx.strokeStyle = accent; ctx.lineWidth = 2; ctx.stroke();
+  ctx.lineTo(x(maxD), H - pad.b); ctx.lineTo(x(0), H - pad.b); ctx.closePath();
+  ctx.globalAlpha = 0.18; ctx.fillStyle = accent; ctx.fill(); ctx.globalAlpha = 1;
+  ctx.fillStyle = muted; ctx.font = '11px system-ui, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(`${Math.round(maxE)} m`, pad.l - 4, pad.t + 8);
+  ctx.fillText(`${Math.round(minE)} m`, pad.l - 4, H - pad.b);
+  ctx.textAlign = 'left'; ctx.fillText('0', pad.l, H - 4);
+  ctx.textAlign = 'right'; ctx.fillStyle = fg; ctx.fillText(`${(maxD / 1000).toFixed(2)} km`, W - pad.r, H - 4);
+  // Ganho/perda acumulados, ignorando ruído < 1 m entre amostras.
+  let gain = 0, loss = 0, ref = elevs[0];
+  for (const e of elevs) {
+    if (e - ref >= 1) { gain += e - ref; ref = e; } else if (ref - e >= 1) { loss += ref - e; ref = e; }
+  }
+  return { gain: Math.round(gain), loss: Math.round(loss) };
+}
+
 // ==== PAINEL MOBILE (BOTTOM SHEET) ====
 $('#sheet-handle').addEventListener('click', () => {
   const p = $('#panel');
@@ -401,6 +648,9 @@ $('#sheet-handle').addEventListener('click', () => {
   else if (p.classList.contains('expanded')) { p.classList.remove('expanded'); p.classList.add('collapsed'); }
   else p.classList.add('expanded');
 });
+
+// ==== INICIALIZAÇÃO ====
+renderLegend();
 </script>
 </body>
 </html>
