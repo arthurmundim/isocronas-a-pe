@@ -2,6 +2,13 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.4.0] - 2026-10-21
+
+### Adicionado
+- "✨ Sugestão com IA": texto de amigo fotógrafo sobre a caminhada, em ordem cronológica, citando a configuração de câmera de cada momento. Roda no aparelho (WebLLM + WebGPU, Qwen2.5 1.5B, ~0,9 GB baixado uma vez), só por botão, com tamanho Curto / Médio / Longo.
+- Configurações de câmera determinísticas por situação (golden/blue hour, noite, sol alto, encoberto, contraluz, street, arquitetura, sombras, água) nos dados da rota.
+- Aviso quando o aparelho não suporta (sem WebGPU/GPU), quando os dados mudaram depois do texto e quando o texto cita horários que não estão nos dados.
+
 ## [0.3.0] - 2026-10-21
 
 ### Adicionado
@@ -44,6 +51,7 @@ Primeira versão funcional.
 - Layout responsivo: painel lateral vira bottom sheet no celular.
 - Cache em memória, filas com intervalo mínimo por API e fallback/backoff entre servidores Overpass.
 
+[0.4.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/arthurmundim/isocronas-a-pe/releases/tag/v0.1.0

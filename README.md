@@ -14,6 +14,7 @@ Dicas de uso:
 - Para um número exato, digite "Rua X 123" e tecle Enter. Se o número não estiver no OpenStreetMap, o pin fica na rua e dá para arrastar.
 - Escolha o ritmo (Fotografando, Passeio, Normal, Apressado) e ligue "Evitar ladeiras" se quiser priorizar ruas planas.
 - Com a rota aberta, escolha "Sair às" ou "Chegar às" (ou um atalho como "Chegar: Golden tarde") e marque os estilos de foto que você gosta: o app sugere o que observar no caminho (contraluz, fachadas iluminadas, corredores de luz, lugares perto da rota). As linhas do sol passam a sair do destino.
+- Embaixo das dicas, "✨ Sugestão com IA" escreve um texto de amigo fotógrafo sobre a caminhada, com as configurações de câmera de cada momento. Escolha o tamanho (Curto / Médio / Longo) e clique. Roda no seu aparelho, sem enviar dados; na primeira vez baixa o modelo (~0,9 GB).
 - O link da página guarda a exploração (ponto, anéis, velocidade, filtros, data e tema). Use "Copiar link" para compartilhar.
 
 ## APIs usadas
@@ -28,7 +29,7 @@ Dicas de uso:
 | [Overpass API](https://overpass-api.de) | Pontos para fotografar (dados OpenStreetMap) |
 | [Open-Meteo](https://open-meteo.com) | Previsão de cobertura de nuvens |
 
-Libs via CDN (versões fixadas): MapLibre GL JS 4.7.1, SunCalc 1.9.0, turf.js 7.1.0.
+Libs via CDN (versões fixadas): MapLibre GL JS 4.7.1, SunCalc 1.9.0, turf.js 7.1.0 e, só se você usar a IA, WebLLM 0.2.85 com o modelo Qwen2.5 1.5B (pesos no Hugging Face).
 
 ## Limites conhecidos
 
@@ -37,6 +38,7 @@ Libs via CDN (versões fixadas): MapLibre GL JS 4.7.1, SunCalc 1.9.0, turf.js 7.
 - **CEP**: as coordenadas do BrasilAPI costumam ser o centro da cidade; por isso o app geocodifica a rua no Nominatim (1 req/s) e só usa as do BrasilAPI como aproximação.
 - Pontos de área grande (ex.: parques) são representados pelo centro; um parque que encosta na mancha mas tem o centro fora não aparece.
 - Previsão de nuvens cobre só os próximos 3 dias; os horários de luz valem para qualquer data.
-- Cache é só em memória (some ao recarregar).
+- Cache das APIs é só em memória (some ao recarregar).
+- **IA**: precisa de WebGPU (Chrome/Edge no desktop, Chrome no Android) e baixa ~0,9 GB na primeira vez. É um modelo pequeno: o texto pode sair com português truncado ou misturar detalhes; as dicas por regras e os dados ficam sempre visíveis para conferência. Aberto via `file://`, o cache do modelo pode não funcionar (não testado).
 
 Dados © colaboradores do [OpenStreetMap](https://www.openstreetmap.org/copyright).
