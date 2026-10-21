@@ -19,11 +19,15 @@ map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 const EMPTY = { type: 'FeatureCollection', features: [] };
 const sourceData = {};
 const overlays = [];
+// Os scripts carregam em sequência e o 'style.load' pode disparar entre eles; isStyleLoaded() ainda pode
+// ser false logo depois (fontes carregando), então usamos uma flag própria para não perder overlays.
+let styleReady = false;
+const addOverlay = (fn) => { try { fn(); } catch (e) { console.error('overlay', e); } };
 function registerOverlay(addFn) {
   overlays.push(addFn);
-  if (map.isStyleLoaded()) addFn();
+  if (styleReady) addOverlay(addFn);
 }
-map.on('style.load', () => overlays.forEach((fn) => fn()));
+map.on('style.load', () => { styleReady = true; overlays.forEach(addOverlay); });
 function ensureSource(id) {
   if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data: sourceData[id] || EMPTY });
 }
@@ -55,7 +59,7 @@ function setMapStyle(style, { apply = true } = {}) {
   document.documentElement.dataset.theme = style;
   styleToggle.render();
   // diff:false força um 'style.load' completo, que re-adiciona os overlays.
-  if (changed && apply) map.setStyle(CONFIG.styles[style], { diff: false });
+  if (changed && apply) { styleReady = false; map.setStyle(CONFIG.styles[style], { diff: false }); }
   onStateChanged();
 }
 function onStateChanged() { writeHash(); }
