@@ -2,6 +2,11 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.5.6] - 2026-10-21
+
+### Corrigido
+- Concordância na chegada dos momentos: "você chega com sol baixo" / "na golden hour" / "à noite" (antes saía "chega na sol baixo").
+
 ## [0.5.5] - 2026-10-21
 
 ### Alterado
@@ -103,6 +108,7 @@ Primeira versão funcional.
 - Layout responsivo: painel lateral vira bottom sheet no celular.
 - Cache em memória, filas com intervalo mínimo por API e fallback/backoff entre servidores Overpass.
 
+[0.5.6]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.2...v0.5.3

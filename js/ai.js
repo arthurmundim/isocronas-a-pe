@@ -62,6 +62,8 @@ const CAT_IDEA = {
   historic: ['construção histórica: detalhes e textura da fachada', 'arquitetura'], worship: ['fachada e torres da igreja', 'arquitetura'],
   park: ['verde e sombra aberta', 'retrato sombra'], fountain: ['água e reflexos', 'agua'], cafe: ['gente nas mesas e vitrines', 'street'],
 };
+// "chega na golden hour" / "chega à noite" / "chega com sol baixo".
+const phaseAt = (fase) => (/hour$/.test(fase) ? `na ${fase}` : fase === 'noite' ? 'à noite' : `com ${fase}`);
 function aiMoments(f, n) {
   const toMin = (h) => { const [H, M] = h.split(':').map(Number); return H * 60 + M; };
   const t0 = toMin(f.caminhada.saida);
@@ -79,7 +81,7 @@ function aiMoments(f, n) {
   const sky = !f.nuvens ? '' : blocked ? `; céu ${f.nuvens.total_pct}% encoberto, luz difusa`
     : f.nuvens.altas_pct >= 40 && f.nuvens.baixas_pct < 40 ? '; nuvens altas que podem pegar cor' : '';
   add({ hora: C.hora, onde: f.destino.nome, prio: 1000, fim: true,
-    ver: `você chega na ${C.fase}${next ? `; ${next.evento} ${next.minutos_apos_chegada} min depois (${next.hora})` : ''}${sky}`,
+    ver: `você chega ${phaseAt(C.fase)}${next ? `; ${next.evento} ${next.minutos_apos_chegada} min depois (${next.hora})` : ''}${sky}`,
     camera: cameraForPhase(C.fase, blocked) });
 
   // Onde você estará num horário: a rua (nomeada) do trecho em andamento, nunca um vago "no caminho".
