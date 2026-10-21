@@ -127,27 +127,33 @@ function aiMoments(f, n) {
   picked.sort((a, b) => a.t - b.t);
   return picked;
 }
-const momentsText = (ms) => ms.map((m, i) => `${i + 1}) ${m.hora} — ${m.onde} — o que observar: ${m.ver} — câmera: ${m.camera}`).join('\n');
+// Chave/registro completo dos momentos (inclui câmera), usada no aviso de "dados mudaram" e na checagem.
+const momentsText = (ms) => ms.map((m, i) => `${i + 1}) ${m.hora} — ${m.onde} — o que observar: ${m.ver} — câmera: ${camText(m.camera)}`).join('\n');
+// O que vai para o modelo: sem horário e sem câmera (o app mostra os dois à parte, no formato padrão).
+const momentsPrompt = (ms) => ms.map((m, i) => `${i + 1}) ${m.onde} — o que observar: ${m.ver}`).join('\n');
 
 // ==== PROMPT ====
+// Estrutura da resposta: o modelo escreve só a frase sugestiva de cada momento; hora, lugar, configuração de câmera
+// e o motivo técnico são montados pelo app (renderAiOut), sempre no mesmo formato e com os números certos.
 const AI_SYSTEM = [
-  'Você é um amigo fotógrafo. Reescreva cada momento numerado como um parágrafo curto (1 ou 2 frases), falando com "você",',
-  'exatamente um parágrafo por momento, na mesma quantidade de momentos recebidos,',
-  'em português do Brasil simples, com tom leve e sugestivo.',
-  'Regras: mantenha a ordem; comece cada parágrafo pelo horário; copie exatamente os nomes, horários e a configuração de câmera;',
-  'não acrescente lugares, pessoas, objetos, cores ou números que não estejam no momento; não use listas, títulos nem markdown.',
+  'Você é um amigo fotógrafo. Para cada momento numerado, escreva UMA linha começando pelo mesmo número (ex.: "1) ..."),',
+  'com 1 ou 2 frases curtas falando com "você", em português do Brasil simples e sugestivo:',
+  'o que observar e o que fotografar naquele lugar, naquele momento.',
+  'Escreva exatamente uma linha por momento, na mesma ordem e quantidade.',
+  'Não escreva horários nem configurações de câmera (ISO, abertura, velocidade, EV): o app mostra isso à parte.',
+  'Não acrescente lugares, pessoas, objetos ou cores que não estejam no momento; não use títulos nem markdown.',
 ].join(' ');
 // Exemplo (few-shot) com lugares de outra cidade, para o modelo não copiar nomes reais da rota.
 const AI_EXAMPLE_IN = [
-  '1) 07:10 — Praça XV — o que observar: saída com luz de golden hour — câmera: ISO 100–400, f/5.6–8, 1/250 s',
-  '2) 07:18 — Rua do Ouvidor — o que observar: fachadas do lado esquerdo com luz quente vindo de lado — câmera: f/8–11, ISO baixo, câmera nivelada para não entortar as verticais',
-  '3) 07:25 — Paço Imperial — o que observar: você chega na golden hour; fim da golden hour da manhã 12 min depois (07:37) — câmera: ISO 100–400, f/5.6–8, 1/250 s',
+  '1) Praça XV — o que observar: saída com luz de golden hour',
+  '2) Rua do Ouvidor — o que observar: fachadas do lado esquerdo com luz quente vindo de lado',
+  '3) Paço Imperial — o que observar: você chega na golden hour; fim da golden hour da manhã 12 min depois',
 ].join('\n');
 const AI_EXAMPLE_OUT = [
-  'Às 07:10, na Praça XV, a luz ainda está baixinha e dourada: aproveite logo na saída. Vá de ISO 100–400, f/5.6–8 e 1/250 s.',
-  'Lá pelas 07:18, na Rua do Ouvidor, repare nas fachadas do lado esquerdo pegando luz quente de lado, ótimas para textura. Use f/8–11, ISO baixo e mantenha a câmera nivelada para não entortar as verticais.',
-  'Por volta das 07:25 você chega ao Paço Imperial ainda na golden hour, que termina às 07:37: dá tempo, mas sem enrolar. Fique em ISO 100–400, f/5.6–8, 1/250 s.',
-].join('\n\n');
+  '1) Logo na saída, na Praça XV, a luz ainda está baixa e dourada: comece pelas cenas abertas da praça antes que ela suba.',
+  '2) Na Rua do Ouvidor, olhe para as fachadas do lado esquerdo pegando luz de lado; é a hora de mostrar textura de reboco e janelas.',
+  '3) No Paço Imperial você ainda pega a golden hour, mas ela acaba em poucos minutos: priorize a fachada principal enquanto a luz está quente.',
+].join('\n');
 // Janela pertinente: da saída até 2 h depois da chegada. Só o que cai nela entra no contexto e pode ser citado.
 function aiWindow(f) {
   const toMin = (h) => { const [H, M] = h.split(':').map(Number); return H * 60 + M; };
@@ -170,8 +176,8 @@ function aiRules(f) {
   const w = aiWindow(f);
   const r = [
     `Fale só do período da caminhada (das ${f.caminhada.saida} às ${f.caminhada.chegada}) e do que está no contexto; não comente outros horários do dia.`,
-    'Use só os números de câmera do próprio momento: não troque, arredonde nem misture valores de momentos diferentes.',
-    'Não cite equipamentos (flash, tripé, lentes, filtros, rebatedor) nem modos de câmera que não estejam na configuração do momento.',
+    'Não escreva números de câmera (ISO, f/, velocidade, EV) nem horários: eles já aparecem formatados ao lado do seu texto.',
+    'Não cite equipamentos (flash, tripé, lentes, filtros, rebatedor) nem modos de câmera.',
     'Cite cada lugar exatamente como está escrito no momento; nunca use expressões vagas como "o café", "o prédio" ou "a praça".',
   ];
   if (f.nuvens?.total_pct >= 85) r.push(`O céu estará ${f.nuvens.total_pct}% encoberto: não fale de sol direto, contraluz, sombras longas nem céu colorido.`);
@@ -186,7 +192,7 @@ function aiMessages(f, moments, fix = '') {
     { role: 'system', content: system },
     { role: 'user', content: `Momentos (3):\n${AI_EXAMPLE_IN}` },
     { role: 'assistant', content: AI_EXAMPLE_OUT },
-    { role: 'user', content: `Contexto: ${aiContext(f)}\nMomentos (${moments.length}):\n${momentsText(moments)}` },
+    { role: 'user', content: `Contexto: ${aiContext(f)}\nMomentos (${moments.length}):\n${momentsPrompt(moments)}` },
   ];
 }
 
@@ -209,9 +215,11 @@ function aiCheck(text, f, moments) {
   const issues = [];
   const times = [...new Set(text.match(/\b\d{1,2}:\d{2}\b/g) || [])].filter((h) => !known.includes(h.padStart(5, '0')));
   if (times.length) issues.push(`horário fora dos dados (${times.join(', ')})`);
-  const allowed = cameraNumbers(known);
-  const cams = [...cameraNumbers(text)].filter((x) => !allowed.has(x));
-  if (cams.length) issues.push(`configuração de câmera fora dos dados (${cams.map((c) => c.replace(/^(iso|f|s|ev)/, (k) => ({ iso: 'ISO ', f: 'f/', s: '1/', ev: 'EV ' }[k]))).join(', ')})`);
+  // Configuração de câmera é sempre montada pelo app; no texto do modelo ela não deve aparecer.
+  const cams = [...cameraNumbers(text)];
+  if (cams.length) issues.push(`escreveu configuração de câmera no texto (${cams.map((c) => c.replace(/^(iso|f|s|ev)/, (k) => ({ iso: 'ISO ', f: 'f/', s: '1/', ev: 'EV ' }[k]))).join(', ')})`);
+  const missing = moments.map((_, i) => i + 1).filter((n) => !parseAiLines(text)[n]);
+  if (missing.length) issues.push(`faltou o texto do momento ${missing.join(', ')}`);
   const gear = (text.match(/\b(flash|trip[ée]|lentes?|teleobjetiva|grande[- ]angular|filtros?|rebatedor|polarizador)\b/gi) || []).filter((g) => !new RegExp(g, 'i').test(known));
   if (gear.length) issues.push(`equipamento não sugerido (${[...new Set(gear.map((g) => g.toLowerCase()))].join(', ')})`);
   if (f.nuvens?.total_pct >= 85 && /contraluz|sombras? longas?|sol direto|céu colorido/i.test(text)) issues.push('fala de sol direto com o céu encoberto');
@@ -238,9 +246,33 @@ function aiProgress(p, text = '') {
   $('#ai-progress-text').textContent = mb ? `Baixando o modelo: ${Math.round(mb)} de ~${AI.downloadMB} MB (só na primeira vez)`
     : p >= 1 || /Finish|GPU|shader/i.test(text) ? 'Preparando o modelo na GPU…' : (text || 'Carregando…').slice(0, 80);
 }
-function renderAiOut(text, done) {
-  const paras = text.trim().split(/\n\s*\n|\n/).filter(Boolean);
-  $('#ai-out').innerHTML = paras.map((p) => `<p>${esc(p.replace(/\*\*|__|^#+\s*/g, ''))}</p>`).join('') + (done ? '' : '<span class="ai-caret"></span>');
+// "1) texto…" → { 1: 'texto…' }. Linhas sem número continuam a anterior.
+function parseAiLines(text) {
+  const out = {};
+  let cur = null;
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/\*\*|__|^#+\s*/g, '').trim();
+    const m = /^(\d+)[).:-]\s*(.*)$/.exec(line);
+    if (m) { cur = +m[1]; out[cur] = m[2]; } else if (cur && line) out[cur] += ` ${line}`;
+  }
+  return out;
+}
+// Estrutura fixa por momento: hora · lugar, a frase da IA, a configuração no formato padrão e o motivo técnico.
+// Se a IA não escreveu um momento, entra a descrição determinística dele.
+function renderAiOut(text, done, moments) {
+  const lines = parseAiLines(text);
+  const last = Math.max(0, ...Object.keys(lines).map(Number));
+  const shown = done ? moments : moments.slice(0, Math.max(1, last));
+  $('#ai-out').innerHTML = shown.map((m, i) => {
+    // O modelo costuma repetir o lugar no começo ("Avenida X: …"), que já está no cabeçalho.
+    const placePrefix = new RegExp(`^${m.onde.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:,—–-]\\s*`, 'i');
+    const said = lines[i + 1]?.replace(placePrefix, '').replace(/^./, (c) => c.toUpperCase());
+    const typing = !done && i + 1 === Math.max(1, last);
+    const body = said ? esc(said) : done ? `${esc(m.ver[0].toUpperCase() + m.ver.slice(1))}.` : '';
+    return `<div class="ai-moment"><div class="ai-when">${esc(m.hora)} · ${esc(m.onde)}</div>
+      <p>${body}${typing ? '<span class="ai-caret"></span>' : ''}</p>
+      ${!typing || done ? `<p class="ai-cam">📷 ${esc(camText(m.camera))}</p><p class="ai-why"><b>Por quê:</b> ${esc(m.camera.why)}</p>` : ''}</div>`;
+  }).join('');
 }
 async function renderAiControls() {
   $('#ai-size').innerHTML = Object.entries(AI.sizes).map(([k, s]) =>
@@ -303,11 +335,11 @@ async function aiGenerate() {
       let text = '', lastScroll = 0;
       for await (const chunk of stream) {
         text += chunk.choices[0]?.delta?.content || '';
-        renderAiOut(text, false);
+        renderAiOut(text, false, moments);
         // Acompanha o texto sendo escrito, sem rolar a cada token.
         if (performance.now() - lastScroll > 500) { lastScroll = performance.now(); reveal('#ai-status', 'nearest'); }
       }
-      renderAiOut(text, true);
+      renderAiOut(text, true, moments);
       return text;
     };
     let text = await write(aiMessages(f, moments), 0.3);

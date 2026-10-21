@@ -239,22 +239,25 @@ function buildFacts() {
 }
 
 // ==== CONFIGURAÇÕES DE CÂMERA (DETERMINÍSTICAS) ====
-// Pontos de partida por situação, para regras e IA citarem sem inventar números (câmera ou celular no modo "pro").
+// Pontos de partida por situação (câmera ou celular no modo "pro"), sempre com o motivo da escolha.
+// O app monta o texto final no formato padrão; a IA nunca escreve esses números.
 const CAMERA = {
-  'golden hour': 'ISO 100–400, f/5.6–8, 1/250 s, balanço de branco "luz do dia" para manter o tom quente',
-  'blue hour': 'na mão ISO 1600–3200, f/2.8, 1/60 s; com apoio ISO 100, f/8, 2–10 s',
-  'noite': 'ISO 3200–6400, f/1.8–2.8, 1/60 s, exposição pelas luzes',
-  'sol alto': 'ISO 100, f/8–11, 1/500 s, −0,3 EV para não estourar as altas luzes',
-  'sol baixo': 'ISO 100–200, f/8, 1/250–1/500 s',
-  'encoberto': 'ISO 400–800, f/5.6, 1/250 s, +0,3 EV',
-  'contraluz': 'medição nas altas luzes, −0,7 a −1 EV, f/8, 1/500 s',
-  'contraluz retrato': 'f/2–2.8, +0,3 EV para o rosto, com o sol atrás da pessoa',
-  'street': '1/250–1/500 s para congelar, f/8 com foco por zona (~3 m)',
-  'arquitetura': 'f/8–11, ISO baixo, câmera nivelada para não entortar as verticais',
-  'sombras': '−0,7 a −1 EV para sombras pretas, f/8',
-  'agua': 'com apoio ISO 100, f/11, 1/2–2 s (água sedosa); na mão 1/1000 s para congelar gotas',
-  'retrato sombra': 'f/2–2.8, ISO 200–400, 1/250 s, na sombra aberta',
+  'golden hour': { iso: '100–400', ap: 'f/5.6–8', ss: '1/250 s', why: 'A luz é baixa e quente, mas ainda forte: ISO baixo evita ruído, f/5.6–8 deixa a cena nítida de ponta a ponta e 1/250 s congela quem passa. Use balanço de branco "luz do dia" para não neutralizar o dourado.' },
+  'blue hour': { iso: '1600–3200', ap: 'f/2.8', ss: '1/60 s', why: 'Pouca luz: diafragma aberto e ISO alto permitem fotografar na mão sem tremer. Com apoio firme, troque por ISO 100, f/8 e 2–10 s para céu limpo e luzes em estrela.' },
+  noite: { iso: '3200–6400', ap: 'f/1.8–2.8', ss: '1/60 s', ev: '−0,3', why: '1/60 s é o limite para não borrar na mão, então a luz vem do ISO alto e do diafragma aberto; expor um pouco para baixo segura letreiros e postes acesos.' },
+  'sol alto': { iso: '100', ap: 'f/8–11', ss: '1/500 s', ev: '−0,3', why: 'Luz farta: ISO mínimo e f/8–11 dão a maior nitidez; −0,3 EV protege as altas luzes, que estouram fácil com sol forte.' },
+  'sol baixo': { iso: '100–200', ap: 'f/8', ss: '1/250–1/500 s', why: 'Ainda há bastante luz e ela vem de lado: ISO baixo e f/8 mantêm detalhe, e a velocidade alta congela o movimento sem perder as sombras longas.' },
+  encoberto: { iso: '400–800', ap: 'f/5.6', ss: '1/250 s', ev: '+0,3', why: 'Céu fechado rouba luz: ISO médio mantém 1/250 s sem tremer; +0,3 EV compensa o fotômetro, que tende a deixar o céu claro cinzento.' },
+  contraluz: { iso: '100–200', ap: 'f/8', ss: '1/500 s', ev: '−0,7 a −1', why: 'Contra o sol, medir nas altas luzes e subexpor preserva a cor do céu e transforma quem passa em silhueta; f/8 e 1/500 s seguram a luz forte.' },
+  'contraluz retrato': { iso: '100–200', ap: 'f/2–2.8', ss: '1/500 s', ev: '+0,3', why: 'Com o sol atrás da pessoa, o diafragma aberto desfoca o fundo e +0,3 EV clareia o rosto, que fica na sombra; o sol vira um contorno de luz no cabelo.' },
+  street: { iso: '200–800', ap: 'f/8', ss: '1/250–1/500 s', why: 'Pelo menos 1/250 s congela pedestres; f/8 com foco fixo em ~3 m (foco por zona) deixa tudo nítido sem esperar o autofoco.' },
+  arquitetura: { iso: '100', ap: 'f/8–11', ss: '1/125 s', why: 'f/8–11 é a faixa mais nítida da maioria das lentes e mantém a fachada inteira em foco; nivele a câmera para as linhas verticais não "caírem".' },
+  sombras: { iso: '100', ap: 'f/8', ss: '1/500 s', ev: '−0,7 a −1', why: 'Subexpor deixa as sombras pretas e realça formas e linhas; f/8 mantém as bordas nítidas.' },
+  agua: { iso: '100', ap: 'f/11', ss: '1/2–2 s', why: 'Exposição longa deixa a água sedosa; ISO 100 e f/11 reduzem a luz para caber segundos de exposição (precisa de apoio). Na mão, 1/1000 s congela as gotas.' },
+  'retrato sombra': { iso: '200–400', ap: 'f/2–2.8', ss: '1/250 s', why: 'A sombra aberta dá luz suave no rosto, sem olhos apertados; o diafragma aberto separa a pessoa do fundo.' },
 };
+// Formato padrão exibido e enviado: "(ISO: 100–400, Aperture: f/5.6–8, Shutter Speed: 1/250 s, EV: −0,3)".
+const camText = (c) => `(ISO: ${c.iso}, Aperture: ${c.ap}, Shutter Speed: ${c.ss}${c.ev ? `, EV: ${c.ev}` : ''})`;
 // Configuração para uma fase de luz, considerando céu encoberto (sem sol direto).
 function cameraForPhase(phase, blocked) {
   if (blocked && phase !== 'blue hour' && phase !== 'noite') return CAMERA.encoberto;
@@ -262,7 +265,7 @@ function cameraForPhase(phase, blocked) {
 }
 function cameraSettingsFor(f) {
   const out = [];
-  const add = (situacao, quando, config) => out.push({ situacao, quando, config });
+  const add = (situacao, quando, c) => out.push({ situacao, quando, config: camText(c), motivo: c.why });
   const blocked = f.nuvens?.total_pct >= 85;
   const styles = new Set(f._styles);
   const phases = [['saída', f.luz.na_saida], ['chegada', f.luz.na_chegada]];
@@ -271,7 +274,7 @@ function cameraSettingsFor(f) {
     add(blocked && !['blue hour', 'noite'].includes(l.fase) ? `${l.fase}, céu encoberto` : l.fase, `${label} (${l.hora})`, cameraForPhase(l.fase, blocked));
   }
   if (!blocked && f.trechos.some((t) => t.luz.startsWith('contraluz') && t.altitude_sol > -1 && t.altitude_sol < 25))
-    add('contraluz / silhuetas', 'trechos em direção ao sol', CAMERA.contraluz + (styles.has('retrato') ? `; retrato: ${CAMERA['contraluz retrato']}` : ''));
+    add('contraluz / silhuetas', 'trechos em direção ao sol', styles.has('retrato') ? CAMERA['contraluz retrato'] : CAMERA.contraluz);
   if (styles.has('street')) add('street', 'cenas em movimento', CAMERA.street);
   if (styles.has('arquitetura') || styles.has('paisagem')) add('arquitetura / paisagem', 'fachadas e vistas', CAMERA.arquitetura);
   if (styles.has('minimal')) add('sombras gráficas', 'sol baixo ou duro', CAMERA.sombras);

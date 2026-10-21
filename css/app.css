@@ -198,3 +198,10 @@ div.step + div.step, #trip > .step + #suggest { margin-top: 8px; }
 .step-next { display: block; width: 100%; margin-top: 12px; padding: 9px 12px; }
 .btn-stop { display: block; width: 100%; margin-top: 8px; }
 .dest-hint { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--bg-2); border: 1px dashed var(--accent); }
+
+/* ==== TEXTO DA IA (ESTRUTURA FIXA) ==== */
+.ai-moment + .ai-moment { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.ai-when { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+#ai-out .ai-moment p { margin: 2px 0; }
+#ai-out .ai-cam { font-variant-numeric: tabular-nums; font-size: 12.5px; }
+#ai-out .ai-why { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
