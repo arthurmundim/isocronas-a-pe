@@ -41,6 +41,10 @@ Todas as chamadas passam por um cache em memória (chave = URL + body). Erros de
 ## Decisões
 
 - **CEP**: o BrasilAPI devolve coordenadas do centro da cidade (ex.: CEP da Av. Paulista → Sé). Quando há rua, geocodificamos `rua + cidade` no Nominatim (busca estruturada); as coordenadas do BrasilAPI só entram como aproximação se o Nominatim falhar.
+- **Número da casa**: o Photon só acerta números mapeados e às vezes troca a rua (ex.: "Rua Augusta 1500" → "Rua Cônego Valadão 1500"); reordenamos por número + rua batendo com o texto. Com número, o Enter faz uma busca explícita no Nominatim (permitido; autocomplete não). Se o número não existir, usamos o Photon com a rua sem número (o viés de localização dele acerta a homônima certa) e avisamos para arrastar o pin.
+- **Ritmo**: perfis em `CONFIG.paces` (2,5 / 3,5 / 4,5 / 5,5 km/h); `v` na URL encaixa no perfil mais próximo.
+- **Ladeiras**: liga/desliga; desligado = `use_hills` 0,5 (padrão equilibrado do Valhalla), ligado = 1. Na URL, `h=1` só quando ligado.
+- **Loading**: `cached()` conta requisições pendentes (incluindo fila e retries) para a barra global `#busy`; `setStatus(id, msg, 'loading')` mostra spinner.
 - **Overpass**: uma única consulta com as 7 categorias por bbox (arredondado para fora numa grade de 0,005°); os toggles filtram no cliente. Um bbox novo contido num já baixado reaproveita os dados. `overpass-api.de` rejeita (406) User-Agent genérico de curl; o navegador funciona.
 - **Clique no mapa**: ponto de interesse → popup + rota; dentro da mancha → rota; fora → novo ponto. Clique direito sempre move o pin.
 - **Troca de estilo**: `setStyle(url, { diff: false })` para disparar `style.load` e re-adicionar os overlays registrados com `registerOverlay()`.

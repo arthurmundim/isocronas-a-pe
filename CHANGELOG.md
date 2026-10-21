@@ -2,6 +2,17 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.2.0] - 2026-10-21
+
+### Adicionado
+- Indicadores de carregamento: barra global no topo enquanto houver requisição pendente, spinner em cada seção e no campo de busca, mancha esmaecida durante o recálculo e "…" nas contagens de pontos.
+- Busca por número exato: Enter (ou o item "🔎 Endereço exato") consulta o Nominatim, que tem interpolação de números; resultados do Photon com o número certo vão para o topo.
+
+### Alterado
+- Velocidade virou ritmo com 4 perfis: Fotografando (2,5 km/h), Passeio (3,5), Normal (4,5, padrão) e Apressado (5,5).
+- "Evitar ladeiras" virou liga/desliga (`use_hills` 1 ligado, 0,5 desligado).
+- Quando o número não está mapeado no OSM, o pin vai para a rua certa perto do mapa (Photon sem o número) com aviso para arrastar.
+
 ## [0.1.0] - 2026-10-21
 
 Primeira versão funcional.
@@ -18,4 +29,5 @@ Primeira versão funcional.
 - Layout responsivo: painel lateral vira bottom sheet no celular.
 - Cache em memória, filas com intervalo mínimo por API e fallback/backoff entre servidores Overpass.
 
+[0.2.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/arthurmundim/isocronas-a-pe/releases/tag/v0.1.0

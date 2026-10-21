@@ -11,6 +11,8 @@ Exploração urbana a pé: busque um endereço, CEP ou lugar (ou clique no mapa)
 
 Dicas de uso:
 - Clique **dentro** da mancha para ver a rota a pé e o perfil de elevação; clique **fora** (ou arraste o pin, ou use o clique direito) para mudar o ponto.
+- Para um número exato, digite "Rua X 123" e tecle Enter. Se o número não estiver no OpenStreetMap, o pin fica na rua e dá para arrastar.
+- Escolha o ritmo (Fotografando, Passeio, Normal, Apressado) e ligue "Evitar ladeiras" se quiser priorizar ruas planas.
 - O link da página guarda a exploração (ponto, anéis, velocidade, filtros, data e tema). Use "Copiar link" para compartilhar.
 
 ## APIs usadas
