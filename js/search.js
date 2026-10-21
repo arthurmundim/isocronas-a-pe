@@ -45,31 +45,19 @@ const bboxAround = (km) => {
   return [c.lng - d, c.lat + d, c.lng + d, c.lat - d].map((v) => v.toFixed(3)).join(',');
 };
 
-// Nominatim só em busca explícita (Enter / "Endereço exato"), nunca no autocomplete. Tem interpolação de números.
-async function searchExact(q) {
+// Nominatim só em busca explícita (botão Buscar), nunca enquanto digita. Tem interpolação de números.
+// Devolve a opção com o número exato, ou null se o número não estiver mapeado.
+async function nominatimExact(q) {
   const num = houseNumberOf(q);
-  setStatus('search-status', 'Procurando o número exato…', 'loading');
-  try {
-    const [hit] = await nominatimSearch({ q, addressdetails: 1, viewbox: bboxAround(40) });
-    const a = hit?.address || {};
-    const road = a.road || a.pedestrian || hit?.name;
-    const exact = hit && num && a.house_number && new RegExp(`(^|\\D)${num}(\\D|$)`).test(a.house_number);
-    if (exact) {
-      const place = [a.suburb || a.neighbourhood, a.city || a.town || a.village].filter(Boolean).join(', ');
-      return setPoint(+hit.lat, +hit.lon, [`${road}, ${num}`, place].filter(Boolean).join(' · '));
-    }
-    // Número não mapeado no OSM: a rua sem número no Photon (que prioriza a região do mapa) erra menos que o palpite do Nominatim.
-    const missing = num ? ` · nº ${num} não mapeado; arraste o pin para ajustar` : '';
-    const [street] = await photonSearch(q.replace(new RegExp(`(?:n[º°o.]?\\s*)?\\b${num}\\b`, 'i'), ' ')).catch(() => []);
-    if (street) return setPoint(street.lat, street.lng, [street.title, street.sub].filter(Boolean).join(' · ') + missing);
-    if (hit) return setPoint(+hit.lat, +hit.lon, (hit.name || road) + missing);
-    throw new ApiError('Nominatim', 'Endereço não encontrado.');
-  } catch (e) {
-    setStatus('search-status', e.message, true);
-  }
+  const [hit] = await nominatimSearch({ q, addressdetails: 1, viewbox: bboxAround(40) });
+  const a = hit?.address || {};
+  if (!hit || !num || !a.house_number || !new RegExp(`(^|\D)${num}(\D|$)`).test(a.house_number)) return null;
+  const road = a.road || a.pedestrian || hit.name;
+  const place = [a.suburb || a.neighbourhood, a.city || a.town || a.village].filter(Boolean).join(' · ');
+  return { lat: +hit.lat, lng: +hit.lon, title: `${road}, ${num}`, sub: place, exact: true };
 }
 
-// ==== BUSCA: AUTOCOMPLETE (Photon) ====
+// ==== BUSCA: PHOTON ====
 async function photonSearch(q) {
   const c = map.getCenter();
   const url = CONFIG.photon + '?' + new URLSearchParams({ q, limit: 8, lat: c.lat.toFixed(3), lon: c.lng.toFixed(3) });
@@ -93,94 +81,71 @@ async function photonSearch(q) {
 let suggestions = [], activeIdx = -1, searchSeq = 0;
 function renderSuggestions() {
   $('#suggestions').innerHTML = suggestions.map((s, i) =>
-    `<li role="option" data-i="${i}" class="${i === activeIdx ? 'active' : ''}">${esc(s.title)}<small>${esc(s.sub || '')}</small></li>`).join('');
+    `<li role="option" data-i="${i}" class="${i === activeIdx ? 'active' : ''}">${esc(s.title)}${s.exact ? '<span class="tag">· número exato</span>' : ''}<small>${esc(s.sub || '')}</small></li>`).join('');
 }
 function chooseSuggestion(i) {
   const s = suggestions[i];
   if (!s) return;
   suggestions = []; activeIdx = -1; renderSuggestions();
-  if (s.cep) return searchCep(s.cep);
-  if (s.nominatim) return searchExact(s.nominatim);
   $('#search').value = s.title;
   setPoint(s.lat, s.lng, [s.title, s.sub].filter(Boolean).join(' · '));
 }
-// Com número digitado e sem resultado exato do Photon, oferece a busca exata no Nominatim como 1ª opção.
-function withExactOption(q, res) {
-  if (!houseNumberOf(q) || res.some((s) => s.exact)) return res;
-  return [{ nominatim: q, title: `🔎 Endereço exato: ${q}`, sub: 'busca o número no OpenStreetMap (Nominatim)' }, ...res];
-}
-async function submitSearch(q) {
-  searchSeq++;
-  $('#search-wrap').classList.remove('loading');
-  suggestions = []; renderSuggestions();
-  if (isCep(q)) return searchCep(q);
-  if (q.length < 3) return;
-  if (houseNumberOf(q)) {
-    // Se o Photon já tem o número exato, usa; senão vai ao Nominatim.
-    const res = await photonSearch(q).catch(() => []);
-    const hit = res.find((s) => s.exact);
-    if (hit) { $('#search').value = hit.title; return setPoint(hit.lat, hit.lng, [hit.title, hit.sub].filter(Boolean).join(' · ')); }
-    return searchExact(q);
-  }
-  setStatus('search-status', 'Buscando…', 'loading');
-  try {
-    const [first] = await photonSearch(q);
-    if (!first) return setStatus('search-status', 'Nada encontrado.');
-    $('#search').value = first.title;
-    setPoint(first.lat, first.lng, [first.title, first.sub].filter(Boolean).join(' · '));
-  } catch (e) { setStatus('search-status', e.message, true); }
-}
-async function searchCep(q) {
-  setStatus('search-status', 'Buscando CEP…', 'loading');
-  try {
-    const r = await resolveCep(q);
-    setPoint(r.lat, r.lng, r.label);
-  } catch (e) {
-    setStatus('search-status', e.message, true);
-  }
-}
 
-const runAutocomplete = debounce(async (q) => {
+// Busca explícita (botão "Buscar" ou Enter): junta as fontes e mostra opções; o pin só muda quando a pessoa escolhe.
+async function runSearch() {
+  const q = $('#search').value.trim();
+  if (!isCep(q) && q.length < 3) return setStatus('search-status', 'Digite pelo menos 3 letras, ou um CEP.');
   const seq = ++searchSeq;
+  suggestions = []; activeIdx = -1; renderSuggestions();
   $('#search-wrap').classList.add('loading');
+  setStatus('search-status', isCep(q) ? 'Buscando CEP…' : 'Buscando…', 'loading');
   try {
-    const res = withExactOption(q, await photonSearch(q));
+    let opts;
+    if (isCep(q)) {
+      const r = await resolveCep(q);
+      opts = [{ lat: r.lat, lng: r.lng, title: r.label.replace(/\s*\(CEP.*$/, ''), sub: r.label.match(/\(CEP.*\)$/)?.[0] || '' }];
+    } else {
+      const num = houseNumberOf(q);
+      const [photon, exact] = await Promise.all([photonSearch(q), num ? nominatimExact(q).catch(() => null) : null]);
+      opts = photon;
+      if (exact && !photon.some((p) => p.exact)) opts = [exact, ...photon];
+      // Número não mapeado em nenhuma fonte: oferece a rua sem número (o Photon prioriza a região do mapa).
+      if (num && !opts.some((p) => p.exact)) {
+        const street = await photonSearch(q.replace(new RegExp(`(?:n[º°o.]?\s*)?\b${num}\b`, 'i'), ' ')).catch(() => []);
+        const extra = street.slice(0, 3).map((s) => ({ ...s, sub: `${s.sub} · nº ${num} não mapeado; depois arraste o pin para ajustar` }));
+        opts = [...extra, ...opts.filter((o) => !extra.some((e) => Math.abs(e.lat - o.lat) < 1e-4 && Math.abs(e.lng - o.lng) < 1e-4))];
+      }
+    }
     if (seq !== searchSeq) return;
-    suggestions = res; activeIdx = -1; renderSuggestions();
-    setStatus('search-status', res.length ? '' : 'Nada encontrado.');
+    suggestions = opts.slice(0, 8);
+    renderSuggestions();
+    setStatus('search-status', suggestions.length ? `${suggestions.length} ${suggestions.length === 1 ? 'opção' : 'opções'}: escolha uma.` : 'Nada encontrado. Tente com cidade ou bairro.');
+    if (suggestions.length) reveal('#suggestions', 'nearest');
   } catch (e) {
     if (seq === searchSeq) setStatus('search-status', e.message, true);
   } finally {
     if (seq === searchSeq) $('#search-wrap').classList.remove('loading');
   }
-}, 400);
+}
 
-$('#search').addEventListener('input', (e) => {
-  const q = e.target.value.trim();
-  if (isCep(q)) {
-    searchSeq++;
-    suggestions = [{ cep: q, title: `Buscar CEP ${q}`, sub: 'BrasilAPI' }]; activeIdx = 0; renderSuggestions();
-    return;
-  }
-  if (q.length < 3) { searchSeq++; $('#search-wrap').classList.remove('loading'); suggestions = []; renderSuggestions(); return; }
-  $('#search-wrap').classList.add('loading');
-  runAutocomplete(q);
+$('#search-go').addEventListener('click', runSearch);
+$('#search').addEventListener('input', () => {
+  // Digitar invalida a lista anterior; nada é buscado até clicar em "Buscar".
+  searchSeq++;
+  $('#search-wrap').classList.remove('loading');
+  if (suggestions.length) { suggestions = []; renderSuggestions(); setStatus('search-status', ''); }
 });
 $('#search').addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-    if (!suggestions.length) return;
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && suggestions.length) {
     e.preventDefault();
     activeIdx = (activeIdx + (e.key === 'ArrowDown' ? 1 : -1) + suggestions.length) % suggestions.length;
     renderSuggestions();
   } else if (e.key === 'Enter') {
     e.preventDefault();
-    // Enter sem item destacado = busca explícita (inclui número exato via Nominatim).
-    if (activeIdx >= 0) chooseSuggestion(activeIdx);
-    else submitSearch(e.target.value.trim());
+    if (activeIdx >= 0) chooseSuggestion(activeIdx); else runSearch(); // Enter = atalho do botão "Buscar"
   } else if (e.key === 'Escape') { suggestions = []; renderSuggestions(); }
 });
-$('#suggestions').addEventListener('mousedown', (e) => {
+$('#suggestions').addEventListener('click', (e) => {
   const li = e.target.closest('li');
-  if (li) { e.preventDefault(); chooseSuggestion(+li.dataset.i); }
+  if (li) chooseSuggestion(+li.dataset.i);
 });
-$('#search').addEventListener('blur', () => setTimeout(() => { suggestions = []; renderSuggestions(); }, 150));

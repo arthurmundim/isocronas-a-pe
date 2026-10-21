@@ -50,13 +50,15 @@ input[type="range"] { flex: 1.3; accent-color: var(--accent); }
 .btn:hover { border-color: var(--accent); }
 
 /* ==== BUSCA ==== */
-#search-wrap { position: relative; }
-#suggestions {
-  list-style: none; margin: 4px 0 0; padding: 4px 0; position: absolute; left: 0; right: 0; top: 100%;
-  background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow); z-index: 10;
-}
+.search-row { display: flex; gap: 8px; align-items: stretch; }
+#search-wrap { position: relative; flex: 1; min-width: 0; }
+#search-go { flex: none; padding: 0 14px; }
+/* Resultados ficam no painel (não é dropdown): a pessoa compara e escolhe. */
+#suggestions { list-style: none; margin: 8px 0 0; padding: 4px 0; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
 #suggestions:empty { display: none; }
-#suggestions li { padding: 7px 10px; cursor: pointer; line-height: 1.3; }
+#suggestions li { padding: 8px 10px; cursor: pointer; line-height: 1.3; border-top: 1px solid var(--border); }
+#suggestions li:first-child { border-top: 0; }
+#suggestions li .tag { margin-left: 4px; }
 #suggestions li small { color: var(--muted); display: block; }
 #suggestions li.active, #suggestions li:hover { background: var(--bg-2); }
 
