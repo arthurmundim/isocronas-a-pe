@@ -62,17 +62,12 @@ function completeStep(n) {
   reveal(stepEl(next));
 }
 // Abre "Pontos para fotografar" (onde se escolhe o destino) só quando os pontos já estão no mapa.
-// O Overpass às vezes leva mais de 1 min: depois de 10 s dá para seguir sem esperar (force).
-let skipTimer;
-function showPoisStep(force = false) {
-  const loading = !force && (poiLoading || !state.iso);
+function showPoisStep() {
+  const loading = poiLoading || !state.iso;
   awaitingPois = loading;
   $('#sec-dest').hidden = !loading;
-  clearTimeout(skipTimer);
-  $('#dest-skip').hidden = true;
   if (loading) {
     setStatus('dest-wait', 'Carregando os pontos para fotografar no mapa…', 'loading');
-    skipTimer = setTimeout(() => { $('#dest-skip').hidden = !awaitingPois; }, 10000);
     reveal('#sec-dest');
     return;
   }
@@ -80,7 +75,6 @@ function showPoisStep(force = false) {
   openStep('pois');
   reveal(stepEl('pois'));
 }
-$('#dest-skip').addEventListener('click', () => showPoisStep(true));
 // Chamado quando o Overpass termina (com ou sem erro).
 function flowPoisLoaded() {
   if (awaitingPois && !state.routeTarget) showPoisStep();
