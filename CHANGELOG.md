@@ -2,6 +2,15 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.5.5] - 2026-10-21
+
+### Alterado
+- Texto da IA com estrutura fixa por momento: "hora · lugar", 1–2 frases sugestivas da IA, a configuração no formato padrão "(ISO: …, Aperture: …, Shutter Speed: …, EV: …)" e "Por quê:" com o motivo técnico. Configuração e motivo são montados pelo app (sempre presentes e corretos); a IA escreve só a parte sugestiva, e se faltar algum momento entra a descrição calculada.
+- Configurações de câmera agora têm motivo para cada situação (golden/blue hour, noite, sol alto/baixo, encoberto, contraluz, retrato, street, arquitetura, sombras, água), também no JSON de dados.
+
+### Removido
+- Botão "Escolher o destino sem esperar": a etapa de destino abre só quando os pontos carregam.
+
 ## [0.5.4] - 2026-10-21
 
 ### Alterado
@@ -94,6 +103,7 @@ Primeira versão funcional.
 - Layout responsivo: painel lateral vira bottom sheet no celular.
 - Cache em memória, filas com intervalo mínimo por API e fallback/backoff entre servidores Overpass.
 
+[0.5.5]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.1...v0.5.2
