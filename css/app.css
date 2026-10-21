@@ -97,6 +97,20 @@ input[type="range"] { flex: 1.3; accent-color: var(--accent); }
 #tips b { display: block; font-size: 13.5px; }
 #tips p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.4; }
 #tips .tag { font-size: 11px; color: var(--accent); }
+#ai { margin-top: 6px; }
+#ai h2 small { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 4px; }
+.seg.seg-3 { grid-template-columns: repeat(3, 1fr); }
+.btn-primary { display: block; width: 100%; margin-top: 8px; padding: 9px 12px; background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn-primary:hover { filter: brightness(1.08); }
+#ai-progress { margin-top: 8px; }
+#ai-progress .bar { height: 6px; border-radius: 3px; background: var(--bg-2); overflow: hidden; }
+#ai-progress-bar { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+#ai-progress small { color: var(--muted); font-size: 12px; }
+#ai-out { margin-top: 8px; }
+#ai-out p { margin: 0 0 8px; line-height: 1.55; }
+#ai-out:not(:empty) { padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--bg-2); border-radius: 6px; }
+.ai-caret { display: inline-block; width: 7px; height: 1em; vertical-align: -2px; background: var(--accent); animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
 #facts-wrap { margin-top: 10px; font-size: 12.5px; }
 #facts-wrap summary { cursor: pointer; color: var(--muted); }
 #facts { max-height: 260px; overflow: auto; background: var(--bg-2); padding: 8px; border-radius: 6px; font-size: 11.5px; white-space: pre-wrap; }

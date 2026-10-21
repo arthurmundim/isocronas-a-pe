@@ -208,7 +208,7 @@ function buildFacts() {
   // Nuvens: média da hora da caminhada até 1 h depois da chegada.
   const c = cloudsBetween(leave, new Date(arrive.getTime() + 3600e3));
 
-  return {
+  const facts = {
     data: state.date, fuso: tzName(),
     origem: { nome: state.point.label?.split(' · ')[0] || null, lat: state.point.lat, lng: state.point.lng },
     destino: { nome: t.dest ? t.dest.name || CAT[t.dest.cat].one : null, categoria: t.dest ? CAT[t.dest.cat].one : null, lat: round(lat), lng: round(lng) },
@@ -224,7 +224,51 @@ function buildFacts() {
     pontos_no_caminho: pontos.map(({ along, lng: _x, lat: _y, cat, ...rest }) => rest),
     estilos_preferidos: PHOTO_STYLES.filter((x) => state.styles.has(x.id)).map((x) => x.label),
     _pontos: pontos, // uso interno das regras (coordenadas, categoria); não vai no JSON exibido
+    _styles: [...state.styles],
   };
+  facts.configuracoes_camera = cameraSettingsFor(facts);
+  return facts;
+}
+
+// ==== CONFIGURAÇÕES DE CÂMERA (DETERMINÍSTICAS) ====
+// Pontos de partida por situação, para regras e IA citarem sem inventar números (câmera ou celular no modo "pro").
+const CAMERA = {
+  'golden hour': 'ISO 100–400, f/5.6–8, 1/250 s, balanço de branco "luz do dia" para manter o tom quente',
+  'blue hour': 'na mão ISO 1600–3200, f/2.8, 1/60 s; com apoio ISO 100, f/8, 2–10 s',
+  'noite': 'ISO 3200–6400, f/1.8–2.8, 1/60 s, exposição pelas luzes',
+  'sol alto': 'ISO 100, f/8–11, 1/500 s, −0,3 EV para não estourar as altas luzes',
+  'sol baixo': 'ISO 100–200, f/8, 1/250–1/500 s',
+  'encoberto': 'ISO 400–800, f/5.6, 1/250 s, +0,3 EV',
+  'contraluz': 'medição nas altas luzes, −0,7 a −1 EV, f/8, 1/500 s',
+  'contraluz retrato': 'f/2–2.8, +0,3 EV para o rosto, com o sol atrás da pessoa',
+  'street': '1/250–1/500 s para congelar, f/8 com foco por zona (~3 m)',
+  'arquitetura': 'f/8–11, ISO baixo, câmera nivelada para não entortar as verticais',
+  'sombras': '−0,7 a −1 EV para sombras pretas, f/8',
+  'agua': 'com apoio ISO 100, f/11, 1/2–2 s (água sedosa); na mão 1/1000 s para congelar gotas',
+  'retrato sombra': 'f/2–2.8, ISO 200–400, 1/250 s, na sombra aberta',
+};
+// Configuração para uma fase de luz, considerando céu encoberto (sem sol direto).
+function cameraForPhase(phase, blocked) {
+  if (blocked && phase !== 'blue hour' && phase !== 'noite') return CAMERA.encoberto;
+  return CAMERA[phase === 'sol a pino' ? 'sol alto' : phase] || CAMERA['sol alto'];
+}
+function cameraSettingsFor(f) {
+  const out = [];
+  const add = (situacao, quando, config) => out.push({ situacao, quando, config });
+  const blocked = f.nuvens?.total_pct >= 85;
+  const styles = new Set(f._styles);
+  const phases = [['saída', f.luz.na_saida], ['chegada', f.luz.na_chegada]];
+  for (const [label, l] of phases) {
+    if (label === 'saída' && l.fase === f.luz.na_chegada.fase) continue;
+    add(blocked && !['blue hour', 'noite'].includes(l.fase) ? `${l.fase}, céu encoberto` : l.fase, `${label} (${l.hora})`, cameraForPhase(l.fase, blocked));
+  }
+  if (!blocked && f.trechos.some((t) => t.luz.startsWith('contraluz') && t.altitude_sol > -1 && t.altitude_sol < 25))
+    add('contraluz / silhuetas', 'trechos em direção ao sol', CAMERA.contraluz + (styles.has('retrato') ? `; retrato: ${CAMERA['contraluz retrato']}` : ''));
+  if (styles.has('street')) add('street', 'cenas em movimento', CAMERA.street);
+  if (styles.has('arquitetura') || styles.has('paisagem')) add('arquitetura / paisagem', 'fachadas e vistas', CAMERA.arquitetura);
+  if (styles.has('minimal')) add('sombras gráficas', 'sol baixo ou duro', CAMERA.sombras);
+  if (f._pontos.some((p) => p.cat === 'fountain')) add('água / reflexos', 'fontes no caminho', CAMERA.agua);
+  return out.slice(0, 6);
 }
 
 // ==== RENDER ====
@@ -241,7 +285,9 @@ function renderTrip() {
   $('#trip-result').innerHTML = `Saindo <b>${f.caminhada.saida}</b> → chegando <b>${f.caminhada.chegada}</b>` +
     ` (${f.caminhada.duracao_min} min)<br>Na chegada: <b>${L.na_chegada.fase}</b>, sol a ${L.na_chegada.altitude_sol}°${esc(next)}` +
     (f.nuvens ? `<br>Nuvens previstas: ${f.nuvens.total_pct}% (baixas ${f.nuvens.baixas_pct}%, altas ${f.nuvens.altas_pct}%)` : '<br><small>Sem previsão de nuvens para esse horário (só 3 dias).</small>');
-  const { _pontos, ...shown } = f;
+  const { _pontos, _styles, ...shown } = f;
   $('#facts').textContent = JSON.stringify(shown, null, 2);
   renderTips(f);
+  if (!$("#ai-size").children.length) renderAiControls();
+  aiOnFacts(f);
 }

@@ -63,6 +63,18 @@
       <div class="chips" id="styles" aria-label="Estilos de fotografia"></div>
       <h2 class="tips-title">No caminho, fique atento a</h2>
       <ul id="tips"></ul>
+
+      <div id="ai">
+        <h2 class="tips-title">✨ Sugestão com IA <small>roda no seu aparelho, sem enviar dados</small></h2>
+        <div class="field-label">Tamanho da resposta</div>
+        <div class="seg seg-3" id="ai-size" role="radiogroup" aria-label="Tamanho da resposta"></div>
+        <button class="btn btn-primary" id="ai-go" type="button">✨ Sugerir com IA</button>
+        <p class="hint" id="ai-unsupported" hidden></p>
+        <div id="ai-progress" hidden><div class="bar"><div id="ai-progress-bar"></div></div><small id="ai-progress-text"></small></div>
+        <p class="hint" id="ai-stale" hidden>Os dados da caminhada mudaram desde este texto. Gere de novo para atualizar.</p>
+        <div id="ai-out" aria-live="polite"></div>
+        <p class="status" id="ai-status"></p>
+      </div>
       <details id="facts-wrap">
         <summary>Dados usados nas sugestões</summary>
         <pre id="facts"></pre>
@@ -104,6 +116,7 @@
 <script src="js/light.js"></script>
 <script src="js/trip.js"></script>
 <script src="js/tips.js"></script>
+<script src="js/ai.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
