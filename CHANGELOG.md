@@ -2,6 +2,18 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.6.3] - 2026-10-21
+
+### Alterado
+- Respostas das perguntas por momento em campos fixos: **Resposta** (negrito), **Por quê** e **Dica** (~20 palavras cada, só a primeira frase), mais a configuração 📷. O formato é travado por gramática JSON no WebLLM (o modelo não consegue sair dele).
+- Guardrails no prompt de cada pergunta: objetivo específico, dados em tópicos e sem números, termos proibidos calculados (equipamento, "diafragma fechado" com abertura grande, "sol direto" com céu encoberto, lugares dos exemplos…) e um exemplo pronto por tipo de pergunta.
+- Perguntas de sim/não ("se eu não entrar…", ISO, entrar no lugar, céu fechado): a frase de resposta é do app (veredito calculado); o modelo só explica, e "Por quê"/"Dica" que contradigam o veredito são rejeitados.
+- Cada pergunta é independente (a anterior não vai junto no prompt) e usa só os dados do próprio lugar.
+- O formato das respostas é preparado em segundo plano logo depois do texto da IA: a 1ª pergunta caiu de ~66 s para ~19 s no teste.
+
+### Corrigido
+- O modelo invertia o veredito ("Não funciona" com dados dizendo que funciona), respondia a pergunta anterior em vez da atual, copiava números do motivo técnico e citava lugares do exemplo ("Confeitaria Colombo") ou inventados; tudo isso agora é barrado (com a resposta calculada pelo app como alternativa).
+
 ## [0.6.1] - 2026-10-21
 
 ### Corrigido
@@ -124,6 +136,7 @@ Primeira versão funcional.
 - Layout responsivo: painel lateral vira bottom sheet no celular.
 - Cache em memória, filas com intervalo mínimo por API e fallback/backoff entre servidores Overpass.
 
+[0.6.3]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.6.1...v0.6.3
 [0.6.1]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.6...v0.6.0
 [0.5.6]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.5...v0.5.6
