@@ -233,6 +233,7 @@ function buildFacts() {
     estilos_preferidos: PHOTO_STYLES.filter((x) => state.styles.has(x.id)).map((x) => x.label),
     _pontos: pontos, // uso interno das regras (coordenadas, categoria); não vai no JSON exibido
     _styles: [...state.styles],
+    _destCat: t.dest?.cat || null,
   };
   facts.configuracoes_camera = cameraSettingsFor(facts);
   return facts;
@@ -258,10 +259,27 @@ const CAMERA = {
 };
 // Formato padrão exibido e enviado: "(ISO: 100–400, Aperture: f/5.6–8, Shutter Speed: 1/250 s, EV: −0,3)".
 const camText = (c) => `(ISO: ${c.iso}, Aperture: ${c.ap}, Shutter Speed: ${c.ss}${c.ev ? `, EV: ${c.ev}` : ''})`;
+// Mesma cena com pouca luz (blue hour / noite): as versões de dia acima sairiam escuras demais.
+const CAMERA_LOW = {
+  street: { iso: '3200–6400', ap: 'f/2.8', ss: '1/125 s', why: 'Com pouca luz, 1/125 s ainda congela quem anda devagar; o ISO alto e o diafragma aberto compensam a falta de luz. Com f/2.8 o foco por zona fica curto: foque em quem vem na sua direção.' },
+  arquitetura: { iso: '1600–3200', ap: 'f/4–5.6', ss: '1/30–1/60 s', why: 'Fachadas acesas têm bem menos luz que de dia: f/4–5.6 ainda mantém boa parte do prédio em foco e 1/30–1/60 s pede mão firme. Com apoio, ISO 100, f/8 e 2–8 s deixam a fachada limpa e nítida.' },
+  agua: { iso: '100', ap: 'f/8', ss: '2–10 s', why: 'À noite a água vira espelho das luzes: com apoio, a exposição longa alisa a superfície e deixa os reflexos contínuos.' },
+  'retrato sombra': { iso: '1600–3200', ap: 'f/1.8–2.8', ss: '1/125 s', why: 'Pouca luz: diafragma bem aberto e ISO alto; 1/125 s evita borrar pequenos movimentos. Procure uma vitrine ou poste iluminando o rosto.' },
+};
+// Dentro de um lugar (café, igreja…): luz artificial e bem mais fraca que a da rua.
+CAMERA.interior = { iso: '1600–3200', ap: 'f/2–2.8', ss: '1/60–1/125 s', why: 'Ambientes internos têm muito menos luz que a rua, mesmo de dia: diafragma aberto e ISO alto mantêm uma velocidade segura para fotografar na mão. Ajuste o balanço de branco para a luz do lugar (quente, de lâmpada).' };
+
+const isLowLight = (phase) => phase === 'blue hour' || phase === 'noite';
 // Configuração para uma fase de luz, considerando céu encoberto (sem sol direto).
 function cameraForPhase(phase, blocked) {
   if (blocked && phase !== 'blue hour' && phase !== 'noite') return CAMERA.encoberto;
   return CAMERA[phase === 'sol a pino' ? 'sol alto' : phase] || CAMERA['sol alto'];
+}
+// Configuração para um tipo de cena naquela luz: com pouca luz usa a variante noturna; sem cena, a da fase.
+function cameraForScene(scene, phase, blocked) {
+  if (!scene) return cameraForPhase(phase, blocked);
+  if (isLowLight(phase)) return CAMERA_LOW[scene] || cameraForPhase(phase, blocked);
+  return CAMERA[scene] || cameraForPhase(phase, blocked);
 }
 function cameraSettingsFor(f) {
   const out = [];
@@ -275,10 +293,11 @@ function cameraSettingsFor(f) {
   }
   if (!blocked && f.trechos.some((t) => t.luz.startsWith('contraluz') && t.altitude_sol > -1 && t.altitude_sol < 25))
     add('contraluz / silhuetas', 'trechos em direção ao sol', styles.has('retrato') ? CAMERA['contraluz retrato'] : CAMERA.contraluz);
-  if (styles.has('street')) add('street', 'cenas em movimento', CAMERA.street);
-  if (styles.has('arquitetura') || styles.has('paisagem')) add('arquitetura / paisagem', 'fachadas e vistas', CAMERA.arquitetura);
-  if (styles.has('minimal')) add('sombras gráficas', 'sol baixo ou duro', CAMERA.sombras);
-  if (f._pontos.some((p) => p.cat === 'fountain')) add('água / reflexos', 'fontes no caminho', CAMERA.agua);
+  const fase = f.luz.na_chegada.fase; // cenas por estilo seguem a luz da chegada
+  if (styles.has('street')) add('street', 'cenas em movimento', cameraForScene('street', fase, blocked));
+  if (styles.has('arquitetura') || styles.has('paisagem')) add('arquitetura / paisagem', 'fachadas e vistas', cameraForScene('arquitetura', fase, blocked));
+  if (styles.has('minimal') && !isLowLight(fase)) add('sombras gráficas', 'sol baixo ou duro', CAMERA.sombras);
+  if (f._pontos.some((p) => p.cat === 'fountain')) add('água / reflexos', 'fontes no caminho', cameraForScene('agua', fase, blocked));
   return out.slice(0, 6);
 }
 
@@ -296,7 +315,7 @@ function renderTrip() {
   $('#trip-result').innerHTML = `Saindo <b>${f.caminhada.saida}</b> → chegando <b>${f.caminhada.chegada}</b>` +
     ` (${f.caminhada.duracao_min} min)<br>Na chegada: <b>${L.na_chegada.fase}</b>, sol a ${L.na_chegada.altitude_sol}°${esc(next)}` +
     (f.nuvens ? `<br>Nuvens previstas: ${f.nuvens.total_pct}% (baixas ${f.nuvens.baixas_pct}%, altas ${f.nuvens.altas_pct}%)` : '<br><small>Sem previsão de nuvens para esse horário (só 3 dias).</small>');
-  const { _pontos, _styles, ...shown } = f;
+  const { _pontos, _styles, _destCat, ...shown } = f;
   $('#facts').textContent = JSON.stringify(shown, null, 2);
   renderTips(f);
   if (!$("#ai-size").children.length) renderAiControls();
