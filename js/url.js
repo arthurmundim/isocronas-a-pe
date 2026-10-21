@@ -31,6 +31,7 @@ function syncControls() {
   renderPace();
   $('#hills').checked = state.hills > 0.5;
   $('#date').value = state.date;
+  $('#trip-date').value = state.date;
 }
 
 let lastHash = location.hash.slice(1), hashTimer;

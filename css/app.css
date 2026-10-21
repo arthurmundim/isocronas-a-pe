@@ -179,3 +179,17 @@ table.sun tr + tr { border-top: 1px solid var(--border); }
   #panel header { padding-top: 0; }
   #toasts { bottom: auto; top: 12px; left: 12px; right: 12px; max-width: none; }
 }
+
+/* ==== ETAPAS (MINIMIZÁVEIS) ==== */
+.step-summary { display: none; width: 100%; align-items: center; gap: 8px; text-align: left; border: 1px solid var(--border);
+  background: var(--bg-2); border-radius: 8px; padding: 7px 10px; cursor: pointer; font-size: 13px; line-height: 1.35; }
+.step-summary:hover { border-color: var(--accent); }
+.step-summary .txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.step-summary .edit { color: var(--accent); font-size: 12px; flex: none; }
+.step.collapsed > .step-summary { display: flex; }
+.step.collapsed > .step-body { display: none; }
+section.step.collapsed { padding-top: 6px; padding-bottom: 6px; }
+div.step + div.step, #trip > .step + #suggest { margin-top: 8px; }
+.step-next { display: block; width: 100%; margin-top: 12px; padding: 9px 12px; }
+.btn-stop { display: block; width: 100%; margin-top: 8px; }
+.dest-hint { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--bg-2); border: 1px dashed var(--accent); }

@@ -62,7 +62,7 @@ function setMapStyle(style, { apply = true } = {}) {
   if (changed && apply) { styleReady = false; map.setStyle(CONFIG.styles[style], { diff: false }); }
   onStateChanged();
 }
-function onStateChanged() { writeHash(); }
+function onStateChanged() { writeHash(); refreshSummaries(); }
 
 const pin = new maplibregl.Marker({ color: '#e5484d', draggable: true });
 pin.on('dragend', () => { const { lng, lat } = pin.getLngLat(); setPoint(lat, lng, null, { fly: false }); });
@@ -83,6 +83,7 @@ function setPoint(lat, lng, label = null, { fly = true, show = true } = {}) {
   pin.setLngLat([state.point.lng, state.point.lat]).addTo(map);
   if (fly) map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 14) });
   setStatus('search-status', label ? `📍 ${label}` : `📍 ${state.point.lat.toFixed(5)}, ${state.point.lng.toFixed(5)}`);
+  flowNewPoint();
   onPointChanged();
   if (show) reveal('#sec-iso'); // mostra a Caminhada sendo calculada
 }

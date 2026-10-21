@@ -73,16 +73,18 @@ function aiMoments(f, n) {
   const cand = [];
   const add = (m) => cand.push({ ...m, t: m.fim ? 99999 : rel(m.hora) });
 
-  add({ hora: S.hora, onde: f.origem.nome || 'o ponto de partida', prio: 1000, inicio: true,
+  add({ hora: S.hora, onde: f.origem.nome, prio: 1000, inicio: true,
     ver: `saída com luz de ${S.fase}`, camera: cameraForPhase(S.fase, blocked) });
   const next = f.luz.proximo_evento;
   const sky = !f.nuvens ? '' : blocked ? `; céu ${f.nuvens.total_pct}% encoberto, luz difusa`
     : f.nuvens.altas_pct >= 40 && f.nuvens.baixas_pct < 40 ? '; nuvens altas que podem pegar cor' : '';
-  add({ hora: C.hora, onde: f.destino.nome || 'o destino', prio: 1000, fim: true,
+  add({ hora: C.hora, onde: f.destino.nome, prio: 1000, fim: true,
     ver: `você chega na ${C.fase}${next ? `; ${next.evento} ${next.minutos_apos_chegada} min depois (${next.hora})` : ''}${sky}`,
     camera: cameraForPhase(C.fase, blocked) });
 
-  for (const e of f.luz.eventos_durante) add({ hora: e.hora, onde: 'no caminho', prio: 88, ver: `${e.evento}: a luz muda`,
+  // Onde você estará num horário: a rua (nomeada) do trecho em andamento, nunca um vago "no caminho".
+  const streetAtTime = (h) => f.trechos.filter((t) => !t.rua.startsWith('calçada') && rel(t.inicio) <= rel(h)).at(-1)?.rua || f.destino.nome;
+  for (const e of f.luz.eventos_durante) add({ kind: 'evento', hora: e.hora, onde: streetAtTime(e.hora), prio: 88, ver: `${e.evento}: a luz muda`,
     camera: cameraForPhase(/blue/.test(e.evento) ? 'blue hour' : 'golden hour', blocked) });
 
   if (!blocked) {
@@ -108,7 +110,7 @@ function aiMoments(f, n) {
   const endT = rel(C.hora);
   const merged = cand.filter((m) => {
     if (m === start || m === end) return true;
-    if (m.t <= 3 && m.onde !== 'no caminho' && start.onde === (f.origem.nome || 'o ponto de partida')) {
+    if (m.t <= 3 && m.kind !== 'evento' && start.onde === f.origem.nome) {
       Object.assign(start, { kind: m.kind, onde: m.onde, ver: `${start.ver}; ${m.ver}`, camera: m.camera });
       return false;
     }
@@ -146,13 +148,83 @@ const AI_EXAMPLE_OUT = [
   'Lá pelas 07:18, na Rua do Ouvidor, repare nas fachadas do lado esquerdo pegando luz quente de lado, ótimas para textura. Use f/8–11, ISO baixo e mantenha a câmera nivelada para não entortar as verticais.',
   'Por volta das 07:25 você chega ao Paço Imperial ainda na golden hour, que termina às 07:37: dá tempo, mas sem enrolar. Fique em ISO 100–400, f/5.6–8, 1/250 s.',
 ].join('\n\n');
-function aiMessages(moments) {
+// Janela pertinente: da saída até 2 h depois da chegada. Só o que cai nela entra no contexto e pode ser citado.
+function aiWindow(f) {
+  const toMin = (h) => { const [H, M] = h.split(':').map(Number); return H * 60 + M; };
+  const t0 = toMin(f.caminhada.saida), t1 = toMin(f.caminhada.chegada);
+  const inWin = (h) => { const x = (toMin(h) - t0 + 1440) % 1440; return x >= -30 && x <= ((t1 - t0 + 1440) % 1440) + 120; };
+  const names = { golden_manha: 'golden hour da manhã', nascer: 'nascer do sol', golden_tarde: 'golden hour da tarde', por_do_sol: 'pôr do sol', blue_hour: 'blue hour' };
+  const events = Object.entries(f.luz.horarios_do_dia).filter(([, h]) => h && inWin(h)).map(([k, h]) => ({ key: k, nome: names[k], hora: h }));
+  return { events, has: (k) => events.some((e) => e.key === k) };
+}
+// Contexto do dia (da seção Luz para foto), só o pertinente à janela; não vira momento novo.
+function aiContext(f) {
+  const w = aiWindow(f);
+  const ev = w.events.length ? w.events.map((e) => `${e.nome} às ${e.hora}`).join(', ') : 'nenhum evento de luz nesse período';
+  const n = f.nuvens;
+  const sky = n ? `nuvens previstas ${n.total_pct}% (baixas ${n.baixas_pct}%, altas ${n.altas_pct}%)` : 'sem previsão de nuvens para esse horário';
+  return `Caminhada das ${f.caminhada.saida} às ${f.caminhada.chegada}. Luz no período: ${ev}; ${sky}.`;
+}
+// Regras duras, montadas a partir dos fatos (o modelo pequeno respeita melhor regras concretas do que gerais).
+function aiRules(f) {
+  const w = aiWindow(f);
+  const r = [
+    `Fale só do período da caminhada (das ${f.caminhada.saida} às ${f.caminhada.chegada}) e do que está no contexto; não comente outros horários do dia.`,
+    'Use só os números de câmera do próprio momento: não troque, arredonde nem misture valores de momentos diferentes.',
+    'Não cite equipamentos (flash, tripé, lentes, filtros, rebatedor) nem modos de câmera que não estejam na configuração do momento.',
+    'Cite cada lugar exatamente como está escrito no momento; nunca use expressões vagas como "o café", "o prédio" ou "a praça".',
+  ];
+  if (f.nuvens?.total_pct >= 85) r.push(`O céu estará ${f.nuvens.total_pct}% encoberto: não fale de sol direto, contraluz, sombras longas nem céu colorido.`);
+  const banned = [['nascer', 'nascer do sol'], ['por_do_sol', 'pôr do sol'], ['blue_hour', 'blue hour']].filter(([k]) => !w.has(k)).map(([, n]) => n);
+  if (!w.has('golden_tarde') && !w.has('golden_manha') && !['golden hour'].includes(f.luz.na_saida.fase) && f.luz.na_chegada.fase !== 'golden hour') banned.push('golden hour');
+  if (banned.length) r.push(`Não mencione ${banned.join(', ')}: não acontece nesse período.`);
+  return r;
+}
+function aiMessages(f, moments, fix = '') {
+  const system = [AI_SYSTEM, 'Regras obrigatórias:', ...aiRules(f).map((x, i) => `(${i + 1}) ${x}`), fix].filter(Boolean).join(' ');
   return [
-    { role: 'system', content: AI_SYSTEM },
+    { role: 'system', content: system },
     { role: 'user', content: `Momentos (3):\n${AI_EXAMPLE_IN}` },
     { role: 'assistant', content: AI_EXAMPLE_OUT },
-    { role: 'user', content: `Momentos (${moments.length}):\n${momentsText(moments)}` },
+    { role: 'user', content: `Contexto: ${aiContext(f)}\nMomentos (${moments.length}):\n${momentsText(moments)}` },
   ];
+}
+
+// ==== CHECAGEM DO TEXTO GERADO ====
+// Tudo que o texto cita (horários, números de câmera, equipamentos, eventos de luz) precisa existir nos dados.
+function cameraNumbers(text) {
+  const out = new Set();
+  const add = (k, v) => v && out.add(`${k}${v.replace(',', '.')}`);
+  for (const m of text.matchAll(/ISO\s*(\d+)(?:\s*(?:–|-|a|até)\s*(\d+))?/gi)) { add('iso', m[1]); add('iso', m[2]); }
+  for (const m of text.matchAll(/f\/(\d+(?:[.,]\d+)?)(?:\s*(?:–|-|a)\s*(?:f\/)?(\d+(?:[.,]\d+)?))?/gi)) { add('f', m[1]); add('f', m[2]); }
+  for (const m of text.matchAll(/\b1\/(\d+)/g)) add('s', m[1]);
+  for (const m of text.matchAll(/([+−-]?\d+(?:[.,]\d+)?)(?:\s*a\s*([+−-]?\d+(?:[.,]\d+)?))?\s*EV/g)) {
+    add('ev', m[1].replace('-', '−'));
+    add('ev', m[2]?.replace('-', '−'));
+  }
+  return out;
+}
+function aiCheck(text, f, moments) {
+  const known = `${momentsText(moments)}\n${aiContext(f)}`;
+  const issues = [];
+  const times = [...new Set(text.match(/\b\d{1,2}:\d{2}\b/g) || [])].filter((h) => !known.includes(h.padStart(5, '0')));
+  if (times.length) issues.push(`horário fora dos dados (${times.join(', ')})`);
+  const allowed = cameraNumbers(known);
+  const cams = [...cameraNumbers(text)].filter((x) => !allowed.has(x));
+  if (cams.length) issues.push(`configuração de câmera fora dos dados (${cams.map((c) => c.replace(/^(iso|f|s|ev)/, (k) => ({ iso: 'ISO ', f: 'f/', s: '1/', ev: 'EV ' }[k]))).join(', ')})`);
+  const gear = (text.match(/\b(flash|trip[ée]|lentes?|teleobjetiva|grande[- ]angular|filtros?|rebatedor|polarizador)\b/gi) || []).filter((g) => !new RegExp(g, 'i').test(known));
+  if (gear.length) issues.push(`equipamento não sugerido (${[...new Set(gear.map((g) => g.toLowerCase()))].join(', ')})`);
+  if (f.nuvens?.total_pct >= 85 && /contraluz|sombras? longas?|sol direto|céu colorido/i.test(text)) issues.push('fala de sol direto com o céu encoberto');
+  const w = aiWindow(f);
+  for (const [k, re, n] of [['nascer', /nascer do sol/i, 'nascer do sol'], ['por_do_sol', /p[ôo]r do sol/i, 'pôr do sol'], ['blue_hour', /blue hour/i, 'blue hour']])
+    if (re.test(text) && !w.has(k) && !re.test(momentsText(moments))) issues.push(`cita ${n}, que não acontece nesse período`);
+  // Sem \b depois de palavra acentuada ("café"): em regex JS sem a flag u, "é" não conta como letra.
+  // Substantivo em minúscula = genérico ("a estação"); com maiúscula é nome ("Estação da Luz").
+  const vague = (text.match(/(?:^|[^\wÀ-ú])(?:[oO]|ao|no|do|pelo|[aA]|à|na|da|pela) (?:café|prédio|bar|restaurante|museu|monumento|praça|igreja|loja|estação)(?![\wÀ-ú])(?! sem nome)/g) || [])
+    .map((v) => v.replace(/^[^\wÀ-ú]/, ''))
+    .filter((v) => !known.toLowerCase().includes(v.toLowerCase()));
+  if (vague.length) issues.push(`lugar vago (${[...new Set(vague)].join(', ')})`);
+  return issues;
 }
 
 // ==== UI ====
@@ -181,11 +253,9 @@ async function renderAiControls() {
   $('#ai-go').hidden = !!reason;
   $('.choice').style.gridTemplateColumns = reason ? '1fr' : '';
   if (reason) return;
-  if (aiState.busy) $('#ai-go').innerHTML = '■ Parar<small>interromper o texto</small>';
-  else {
-    const ready = aiState.engine || aiModelCached();
-    $('#ai-go').innerHTML = `✨ Gerar com IA<small>${ready ? 'no seu aparelho' : `baixa ~${(AI.downloadMB / 1000).toFixed(1).replace('.', ',')} GB na 1ª vez`}</small>`;
-  }
+  $('#ai-stop').hidden = !aiState.busy;
+  const ready = aiState.engine || aiModelCached();
+  $('#ai-go').innerHTML = `✨ Gerar com IA<small>${ready ? 'no seu aparelho' : `baixa ~${(AI.downloadMB / 1000).toFixed(1).replace('.', ',')} GB na 1ª vez`}</small>`;
 }
 
 // Escolha entre resposta rápida (regras) e IA. Antes da escolha, nenhuma sugestão aparece.
@@ -197,6 +267,7 @@ function setSuggestMode(mode) {
   quick.open = mode === 'quick';
   for (const id of ['#ai-out', '#ai-status']) $(id).hidden = mode !== 'ai';
   if (mode !== 'ai') $('#ai-stale').hidden = true;
+  $('#facts-wrap').hidden = !mode;
   renderAiControls();
 }
 function resetSuggest() {
@@ -211,6 +282,7 @@ async function aiGenerate() {
   const f = buildFacts();
   if (!f) return;
   setSuggestMode('ai');
+  collapseStep('suggest');
   aiState.busy = true;
   const moments = aiMoments(f, AI.sizes[aiState.size].moments);
   aiState.factsKey = momentsText(moments);
@@ -218,32 +290,38 @@ async function aiGenerate() {
   $('#ai-stale').hidden = true;
   $('#ai-out').innerHTML = '';
   setStatus('ai-status', '');
-  reveal(aiState.engine ? '#ai-go' : '#ai-progress');
+  reveal(aiState.engine ? '#ai-stop' : '#ai-progress');
   try {
     const engine = await aiEngine();
     setStatus('ai-status', 'Escrevendo…', 'loading');
     reveal('#ai-out');
     const t0 = performance.now();
-    const stream = await engine.chat.completions.create({
-      messages: aiMessages(moments), stream: true, stream_options: { include_usage: true },
-      temperature: 0.3, top_p: 0.9, max_tokens: AI.sizes[aiState.size].maxTokens,
-    });
-    let text = '', usage = null, lastScroll = 0;
-    for await (const chunk of stream) {
-      text += chunk.choices[0]?.delta?.content || '';
-      if (chunk.usage) usage = chunk.usage;
-      renderAiOut(text, false);
-      // Acompanha o texto sendo escrito, sem rolar a cada token.
-      if (performance.now() - lastScroll > 500) { lastScroll = performance.now(); reveal('#ai-status', 'nearest'); }
+    const write = async (messages, temperature) => {
+      const stream = await engine.chat.completions.create({
+        messages, stream: true, temperature, top_p: 0.9, max_tokens: AI.sizes[aiState.size].maxTokens,
+      });
+      let text = '', lastScroll = 0;
+      for await (const chunk of stream) {
+        text += chunk.choices[0]?.delta?.content || '';
+        renderAiOut(text, false);
+        // Acompanha o texto sendo escrito, sem rolar a cada token.
+        if (performance.now() - lastScroll > 500) { lastScroll = performance.now(); reveal('#ai-status', 'nearest'); }
+      }
+      renderAiOut(text, true);
+      return text;
+    };
+    let text = await write(aiMessages(f, moments), 0.3);
+    let issues = aiCheck(text, f, moments);
+    // Uma nova tentativa, mais conservadora, apontando o que saiu errado.
+    if (issues.length && aiState.busy) {
+      setStatus('ai-status', `Revisando: a 1ª versão tinha ${issues.join('; ')}…`, 'loading');
+      const fix = `Atenção: na versão anterior você errou (${issues.join('; ')}). Corrija seguindo as regras.`;
+      text = await write(aiMessages(f, moments, fix), 0.1);
+      issues = aiCheck(text, f, moments);
     }
-    renderAiOut(text, true);
     const secs = ((performance.now() - t0) / 1000).toFixed(0);
-    const tps = usage?.extra?.decode_tokens_per_s;
-    // Checagem barata de alucinação: horários no texto que não estão nos momentos.
-    const known = momentsText(moments);
-    const invented = [...new Set(text.match(/\b\d{1,2}:\d{2}\b/g) || [])].filter((h) => !known.includes(h.padStart(5, '0')));
-    const warn = invented.length ? ` ⚠️ O texto cita ${invented.join(', ')}, que não está nos dados.` : '';
-    setStatus('ai-status', `Gerado no seu aparelho em ${secs} s${tps ? ` (${tps.toFixed(0)} tokens/s)` : ''}. Modelo pequeno: confira na resposta rápida abaixo.${warn}`, warn ? 'error' : null);
+    const warn = issues.length ? ` ⚠️ Atenção: ${issues.join('; ')}. Confira na resposta rápida abaixo.` : ' Modelo pequeno: confira na resposta rápida abaixo.';
+    setStatus('ai-status', `Gerado no seu aparelho em ${secs} s.${warn}`, issues.length ? 'error' : null);
   } catch (e) {
     console.error('IA', e);
     const msg = /device.*lost|out of memory|OOM|allocate/i.test(String(e?.message || e))
@@ -263,8 +341,10 @@ function aiOnFacts(f) {
 }
 
 $('#ai-go').addEventListener('click', aiGenerate);
+$('#ai-stop').addEventListener('click', () => aiState.engine?.interruptGenerate());
 $('#quick-go').addEventListener('click', () => {
   setSuggestMode('quick');
+  collapseStep('suggest');
   reveal('#quick');
 });
 $('#ai-size').addEventListener('click', (e) => {

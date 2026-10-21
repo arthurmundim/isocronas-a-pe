@@ -157,7 +157,14 @@ function buildFacts() {
   };
 
   // Trechos com o sol no meio de cada um (ver routeStretches).
-  const trechos = routeStretches(t, coords).map((s) => {
+  const stretches = routeStretches(t, coords);
+  // Lugares sem nome nunca viram "o café": descrevemos pela rua nomeada mais próxima naquele ponto da rota.
+  const named = stretches.filter((s) => !s.name.startsWith('calçada')).map((s) => ({ ...s, name: s.name.replace(/^após /, '') }));
+  const streetAt = (m) => (named.filter((s) => s.startM <= m).at(-1) || named[0])?.name || null;
+  const masc = (r) => /^(largo|viaduto|parque|beco|túnel|elevado|pátio|calçadão|boulevard|passeio|jardim)\b/i.test(r);
+  const atStreet = (m, prep = 'na altura') => { const r = streetAt(m); return r ? `, ${prep === 'na' ? (masc(r) ? 'no' : 'na') : `na altura ${masc(r) ? 'do' : 'da'}`} ${r}` : ''; };
+  const routeM = t.length * 1000;
+  const trechos = stretches.map((s) => {
     const mid = new Date(leave.getTime() + (s.midM / (t.length * 1000)) * t.time * 1000);
     const sun = sunAt(mid, s.midCoord[1], s.midCoord[0]);
     const rel = lightRelation(s.bearing, sun);
@@ -182,7 +189,7 @@ function buildFacts() {
       if (dist > 60) return null;
       const near = turf.nearestPointOnLine(t.line, pt, { units: 'kilometers' }).properties;
       const along = near.location ?? near.lineDistance ?? 0;
-      return { nome: p.name || CAT[p.cat].one, categoria: CAT[p.cat].one, cat: p.cat, distancia_da_rota_m: Math.round(dist),
+      return { nome: p.name || `${CAT[p.cat].one} sem nome no mapa${atStreet(along * 1000)}`, categoria: CAT[p.cat].one, cat: p.cat, distancia_da_rota_m: Math.round(dist),
         hora_aprox: hhmm(new Date(leave.getTime() + (along / t.length) * t.time * 1000)), along, lng: p.lng, lat: p.lat };
     })
     .filter(Boolean).sort((a, b) => a.along - b.along).slice(0, 15);
@@ -210,8 +217,9 @@ function buildFacts() {
 
   const facts = {
     data: state.date, fuso: tzName(),
-    origem: { nome: state.point.label?.split(' · ')[0] || null, lat: state.point.lat, lng: state.point.lng },
-    destino: { nome: t.dest ? t.dest.name || CAT[t.dest.cat].one : null, categoria: t.dest ? CAT[t.dest.cat].one : null, lat: round(lat), lng: round(lng) },
+    origem: { nome: state.point.label?.split(' · ')[0] || `ponto de partida escolhido no mapa${atStreet(0, 'na')}`, lat: state.point.lat, lng: state.point.lng },
+    destino: { nome: t.dest?.name || `${t.dest ? `${CAT[t.dest.cat].one} sem nome no mapa` : 'destino escolhido no mapa'}${atStreet(routeM, 'na')}`,
+      categoria: t.dest ? CAT[t.dest.cat].one : null, lat: round(lat), lng: round(lng) },
     caminhada: { saida: hhmm(leave), chegada: hhmm(arrive), duracao_min: Math.round(t.time / 60), distancia_km: +t.length.toFixed(2),
       ritmo: paceOf(state.speed).label, velocidade_kmh: state.speed, evitar_ladeiras: state.hills > 0.5 },
     elevacao,
@@ -290,4 +298,5 @@ function renderTrip() {
   renderTips(f);
   if (!$("#ai-size").children.length) renderAiControls();
   aiOnFacts(f);
+  refreshSummaries();
 }

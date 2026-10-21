@@ -16,6 +16,7 @@ const compass = (deg) => ['N', 'NE', 'L', 'SE', 'S', 'SO', 'O', 'NO'][Math.round
 function updateLight() {
   if (!state.date) state.date = todayStr();
   $('#date').value = state.date;
+  $('#trip-date').value = state.date;
   if (!state.point) { $('#sun-table').innerHTML = ''; $('#sun-tz').textContent = 'Escolha um ponto.'; return; }
   const { lat, lng } = lightAnchor();
   const t = sunTimes(state.date, lat, lng);
@@ -68,12 +69,15 @@ function drawSunLines() {
   setSourceData('sun', { type: 'FeatureCollection', features });
 }
 
-$('#date').addEventListener('change', (e) => {
+// O dia aparece em dois lugares (Luz para foto e "Quando?"); os dois editam o mesmo state.date.
+const onDateInput = (e) => {
   state.date = e.target.value || todayStr();
   updateLight();
   if (state.trip) renderTrip();
   onStateChanged();
-});
+};
+$('#date').addEventListener('change', onDateInput);
+$('#trip-date').addEventListener('change', onDateInput);
 
 // ==== NUVENS NAS GOLDEN HOURS (OPEN-METEO) ====
 let cloudSeq = 0;
@@ -92,6 +96,7 @@ async function loadClouds() {
     state.weather = data;
     if (tzChanged) updateLight(); // reformatar horários no fuso do lugar
     renderClouds(data);
+    refreshSummaries();
     if (state.trip) renderTrip(); // nuvens na chegada entram nas dicas
     setStatus('cloud-status', 'Fonte: Open-Meteo. Nuvens altas podem render um céu colorido; baixas tendem a bloquear o sol.');
   } catch (e) {

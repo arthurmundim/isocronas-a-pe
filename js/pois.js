@@ -144,6 +144,7 @@ function renderPois() {
   setStatus('poi-summary', poiError || poiLoading ? '' : state.iso
     ? (visible.length ? `${visible.length} pontos em até ${state.times.at(-1)} min (${highlight.join(', ')}).` : 'Nenhum ponto nas categorias ativas.')
     : 'Escolha um ponto para ver o que há por perto.');
+  refreshSummaries();
 }
 $('#poi-retry').addEventListener('click', loadPois);
 $('#poi-list').addEventListener('change', (e) => {

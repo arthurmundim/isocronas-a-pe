@@ -16,7 +16,7 @@ let routeSeq = 0;
 async function showRoute(lat, lng, dest = null, { show = false } = {}) {
   if (!state.point) return;
   const seq = ++routeSeq;
-  if (show) resetSuggest();
+  if (show) { resetSuggest(); flowRouteStart(); }
   state.routeTarget = { lat, lng };
   state.trip = null;
   $('#sec-route').hidden = false;
@@ -64,7 +64,7 @@ function clearRoute() {
   state.trip = null;
   setSourceData('route', EMPTY);
   $('#sec-route').hidden = true;
-  if (had) updateLight(); // luz volta a ter o pin como referência
+  if (had) { updateLight(); flowRouteCleared(); } // luz volta a ter o pin como referência
 }
 $('#route-clear').addEventListener('click', clearRoute);
 
