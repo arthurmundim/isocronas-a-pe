@@ -67,7 +67,7 @@ window.addEventListener('hashchange', () => {
   setMapStyle(h.style);
   renderLegend();
   if (h.point && (h.point.lat !== state.point?.lat || h.point.lng !== state.point?.lng)) {
-    setPoint(h.point.lat, h.point.lng, h.point.label, { fly: false });
+    setPoint(h.point.lat, h.point.lng, h.point.label, { fly: false, show: false });
   } else {
     computeIsochrones();
     updateLight();

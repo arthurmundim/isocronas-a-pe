@@ -13,5 +13,5 @@ styleToggle.render();
 renderLegend();
 renderPois();
 updateLight();
-if (initialHash.point) setPoint(initialHash.point.lat, initialHash.point.lng, initialHash.point.label, { fly: false });
+if (initialHash.point) setPoint(initialHash.point.lat, initialHash.point.lng, initialHash.point.label, { fly: false, show: false });
 else writeHash();

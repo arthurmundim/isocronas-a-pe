@@ -162,7 +162,7 @@ function renderTips(f) {
   const chosen = state.styles;
   // Gerais sempre; específicas só para os estilos marcados. Uma dica de vários estilos aparece uma vez.
   const tips = all.filter((t) => !t.styles.length || t.styles.some((s) => chosen.has(s)))
-    .sort((a, b) => b.score - a.score).slice(0, 8);
+    .sort((a, b) => b.score - a.score).slice(0, AI.sizes[aiState.size].tips);
   const label = (id) => PHOTO_STYLES.find((s) => s.id === id)?.label;
   $('#tips').innerHTML = (tips.length ? tips.map((t) => `<li ${t.at ? `data-lng="${t.at[0]}" data-lat="${t.at[1]}" title="Ver no mapa"` : ''}>
       <span class="ic">${t.icon}</span><div><b>${esc(t.title)}</b><p>${esc(t.text)}</p>

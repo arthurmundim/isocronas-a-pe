@@ -72,18 +72,19 @@ map.on('click', (e) => {
   const { lat, lng } = e.lngLat;
   const poi = map.getLayer('poi') && map.queryRenderedFeatures(e.point, { layers: ['poi'] })[0];
   if (poi) openPoi(poi.properties.id);
-  else if (insideIsochrone(lng, lat)) showRoute(lat, lng);
+  else if (insideIsochrone(lng, lat)) showRoute(lat, lng, null, { show: true });
   else setPoint(lat, lng, null, { fly: false });
 });
 map.on('contextmenu', (e) => setPoint(e.lngLat.lat, e.lngLat.lng, null, { fly: false }));
 
 // ==== PONTO DE PARTIDA ====
-function setPoint(lat, lng, label = null, { fly = true } = {}) {
+function setPoint(lat, lng, label = null, { fly = true, show = true } = {}) {
   state.point = { lat: round(lat), lng: round(lng), label };
   pin.setLngLat([state.point.lng, state.point.lat]).addTo(map);
   if (fly) map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 14) });
   setStatus('search-status', label ? `📍 ${label}` : `📍 ${state.point.lat.toFixed(5)}, ${state.point.lng.toFixed(5)}`);
   onPointChanged();
+  if (show) reveal('#sec-iso'); // mostra a Caminhada sendo calculada
 }
 function onPointChanged() {
   clearRoute();

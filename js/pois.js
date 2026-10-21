@@ -172,5 +172,5 @@ function openPoi(id, { fly = false } = {}) {
   poiPopup?.remove();
   poiPopup = new maplibregl.Popup({ offset: 14, maxWidth: '260px' }).setLngLat([p.lng, p.lat]).setHTML(html).addTo(map);
   if (fly) map.easeTo({ center: [p.lng, p.lat], zoom: Math.max(map.getZoom(), 16), padding: mapPadding() });
-  showRoute(p.lat, p.lng, p);
+  showRoute(p.lat, p.lng, p, { show: true });
 }

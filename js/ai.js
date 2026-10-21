@@ -6,14 +6,15 @@ const AI = {
   lib: 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.85/+esm',
   models: { f16: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC', f32: 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC' },
   downloadMB: 900,
-  // Tempo de leitura → quantos momentos da caminhada entram no texto (~2 frases cada) e teto de tokens.
+  // Tempo de leitura → quantos momentos entram no texto da IA (~2 frases cada), quantas dicas na resposta rápida e teto de tokens.
   sizes: {
-    curto: { label: 'Curto', read: '~20 s de leitura', moments: 3, maxTokens: 240 },
-    medio: { label: 'Médio', read: '~40 s', moments: 4, maxTokens: 330 },
-    longo: { label: 'Longo', read: '~1 min', moments: 6, maxTokens: 500 },
+    curto: { label: 'Curto', read: '~20 s de leitura', moments: 3, tips: 3, maxTokens: 240 },
+    medio: { label: 'Médio', read: '~40 s', moments: 4, tips: 5, maxTokens: 330 },
+    longo: { label: 'Longo', read: '~1 min', moments: 6, tips: 8, maxTokens: 500 },
   },
 };
-const aiState = { webllm: null, engine: null, modelId: null, loading: null, busy: false, size: 'medio', factsKey: null, unsupported: null };
+// mode: null (nada escolhido ainda), 'quick' (resposta rápida) ou 'ai'.
+const aiState = { webllm: null, engine: null, modelId: null, loading: null, busy: false, size: 'medio', factsKey: null, unsupported: null, mode: null };
 try { aiState.size = localStorage.getItem('isocronas.aiSize') || 'medio'; } catch { /* sem armazenamento */ }
 
 // Motivo de não suportar, ou null. Checado uma vez, antes de qualquer download.
@@ -172,42 +173,68 @@ function renderAiOut(text, done) {
 async function renderAiControls() {
   $('#ai-size').innerHTML = Object.entries(AI.sizes).map(([k, s]) =>
     `<button type="button" role="radio" aria-checked="${k === aiState.size}" data-size="${k}">${s.label}<small>${s.read}</small></button>`).join('');
+  $('#quick-go').setAttribute('aria-pressed', String(aiState.mode === 'quick'));
+  $('#ai-go').setAttribute('aria-pressed', String(aiState.mode === 'ai'));
   const reason = await aiSupport();
   $('#ai-unsupported').hidden = !reason;
-  $('#ai-unsupported').textContent = reason ? `IA indisponível: ${reason} As dicas acima continuam valendo.` : '';
+  $('#ai-unsupported').textContent = reason ? `IA indisponível: ${reason} A resposta rápida continua disponível.` : '';
   $('#ai-go').hidden = !!reason;
-  $('#ai-size').hidden = !!reason;
+  $('.choice').style.gridTemplateColumns = reason ? '1fr' : '';
   if (reason) return;
-  if (!aiState.busy) {
+  if (aiState.busy) $('#ai-go').innerHTML = '■ Parar<small>interromper o texto</small>';
+  else {
     const ready = aiState.engine || aiModelCached();
-    $('#ai-go').textContent = ready ? '✨ Sugerir com IA' : `✨ Sugerir com IA (baixa ~${(AI.downloadMB / 1000).toFixed(1).replace('.', ',')} GB uma vez)`;
+    $('#ai-go').innerHTML = `✨ Gerar com IA<small>${ready ? 'no seu aparelho' : `baixa ~${(AI.downloadMB / 1000).toFixed(1).replace('.', ',')} GB na 1ª vez`}</small>`;
   }
+}
+
+// Escolha entre resposta rápida (regras) e IA. Antes da escolha, nenhuma sugestão aparece.
+function setSuggestMode(mode) {
+  aiState.mode = mode;
+  const quick = $('#quick');
+  quick.hidden = !mode;
+  quick.classList.toggle('plain', mode === 'quick');
+  quick.open = mode === 'quick';
+  for (const id of ['#ai-out', '#ai-status']) $(id).hidden = mode !== 'ai';
+  if (mode !== 'ai') $('#ai-stale').hidden = true;
+  renderAiControls();
+}
+function resetSuggest() {
+  if (aiState.busy) aiState.engine?.interruptGenerate();
+  $('#ai-out').innerHTML = '';
+  setStatus('ai-status', '');
+  setSuggestMode(null);
 }
 
 async function aiGenerate() {
   if (aiState.busy) { aiState.engine?.interruptGenerate(); return; }
   const f = buildFacts();
   if (!f) return;
+  setSuggestMode('ai');
   aiState.busy = true;
   const moments = aiMoments(f, AI.sizes[aiState.size].moments);
   aiState.factsKey = momentsText(moments);
-  $('#ai-go').textContent = '■ Parar';
+  renderAiControls();
   $('#ai-stale').hidden = true;
   $('#ai-out').innerHTML = '';
   setStatus('ai-status', '');
+  reveal(aiState.engine ? '#ai-go' : '#ai-progress');
   try {
     const engine = await aiEngine();
     setStatus('ai-status', 'Escrevendo…', 'loading');
+    reveal('#ai-out');
     const t0 = performance.now();
     const stream = await engine.chat.completions.create({
       messages: aiMessages(moments), stream: true, stream_options: { include_usage: true },
       temperature: 0.3, top_p: 0.9, max_tokens: AI.sizes[aiState.size].maxTokens,
     });
-    let text = '', usage = null;
+    let text = '', usage = null, lastScroll = 0;
     for await (const chunk of stream) {
       text += chunk.choices[0]?.delta?.content || '';
       if (chunk.usage) usage = chunk.usage;
       renderAiOut(text, false);
+      // Acompanha o texto sendo escrito, sem rolar a cada token.
+      if (performance.now() - lastScroll > 500) { lastScroll = performance.now(); reveal('#ai-status', 'nearest'); }
     }
     renderAiOut(text, true);
     const secs = ((performance.now() - t0) / 1000).toFixed(0);
@@ -215,14 +242,14 @@ async function aiGenerate() {
     // Checagem barata de alucinação: horários no texto que não estão nos momentos.
     const known = momentsText(moments);
     const invented = [...new Set(text.match(/\b\d{1,2}:\d{2}\b/g) || [])].filter((h) => !known.includes(h.padStart(5, '0')));
-    const warn = invented.length ? ` ⚠️ O texto cita ${invented.join(', ')}, que não está nos dados: confira nas dicas.` : '';
-    setStatus('ai-status', `Gerado no seu aparelho em ${secs} s${tps ? ` (${tps.toFixed(0)} tokens/s)` : ''}. Modelo pequeno: confira com as dicas e os dados acima.${warn}`, warn ? 'error' : null);
+    const warn = invented.length ? ` ⚠️ O texto cita ${invented.join(', ')}, que não está nos dados.` : '';
+    setStatus('ai-status', `Gerado no seu aparelho em ${secs} s${tps ? ` (${tps.toFixed(0)} tokens/s)` : ''}. Modelo pequeno: confira na resposta rápida abaixo.${warn}`, warn ? 'error' : null);
   } catch (e) {
     console.error('IA', e);
     const msg = /device.*lost|out of memory|OOM|allocate/i.test(String(e?.message || e))
       ? 'o aparelho ficou sem memória de vídeo para o modelo. Feche outras abas e tente de novo.'
       : `não consegui rodar o modelo (${String(e?.message || e).slice(0, 120)}).`;
-    setStatus('ai-status', `IA indisponível: ${msg} As dicas acima continuam valendo.`, true);
+    setStatus('ai-status', `IA indisponível: ${msg} A resposta rápida continua disponível.`, true);
   } finally {
     aiState.busy = false;
     renderAiControls();
@@ -236,10 +263,15 @@ function aiOnFacts(f) {
 }
 
 $('#ai-go').addEventListener('click', aiGenerate);
+$('#quick-go').addEventListener('click', () => {
+  setSuggestMode('quick');
+  reveal('#quick');
+});
 $('#ai-size').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-size]');
   if (!b) return;
   aiState.size = b.dataset.size;
   try { localStorage.setItem('isocronas.aiSize', aiState.size); } catch { /* sem armazenamento */ }
+  if (state.trip) renderTrip(); // resposta rápida reflete o novo tamanho; texto da IA fica marcado como desatualizado
   renderAiControls();
 });

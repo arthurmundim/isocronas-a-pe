@@ -122,3 +122,10 @@ function loadStoredStyles() {
 function saveStyles() {
   try { localStorage.setItem(STYLES_KEY, JSON.stringify([...state.styles])); } catch { /* armazenamento indisponível */ }
 }
+
+// Rola o painel até a parte que está em execução ou que pede input (respeita "reduzir movimento").
+function reveal(target, block = 'start') {
+  const el = typeof target === 'string' ? $(target) : target;
+  if (!el || el.closest('[hidden]')) return;
+  el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block });
+}

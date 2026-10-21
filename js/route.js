@@ -12,9 +12,11 @@ registerOverlay(() => {
 
 let routeSeq = 0;
 // dest: ponto de interesse clicado (opcional), usado nas dicas.
-async function showRoute(lat, lng, dest = null) {
+// show: clique do usuário num destino novo; zera a escolha de sugestão e rola até a rota (recálculos não rolam).
+async function showRoute(lat, lng, dest = null, { show = false } = {}) {
   if (!state.point) return;
   const seq = ++routeSeq;
+  if (show) resetSuggest();
   state.routeTarget = { lat, lng };
   state.trip = null;
   $('#sec-route').hidden = false;
@@ -22,6 +24,7 @@ async function showRoute(lat, lng, dest = null) {
   drawElevation([]);
   renderTrip();
   updateLight(); // linhas do sol e horários passam a partir do destino
+  if (show) reveal('#sec-route');
   setStatus('route-status', 'Calculando rota…', 'loading');
   setSourceData('route', { type: 'FeatureCollection', features: [turf.point([lng, lat])] });
   try {
@@ -39,6 +42,7 @@ async function showRoute(lat, lng, dest = null) {
     state.trip = { target: { lat, lng }, dest, time, length, line, maneuvers: leg.maneuvers, elev: null };
     renderTrip();
     enrichStreetNames(state.trip);
+    if (show) reveal('#trip'); // "Quando?" pede o horário
     setStatus('route-status', 'Carregando elevação…', 'loading');
     const h = await valhalla('/height', { encoded_polyline: leg.shape, shape_format: 'polyline6', range: true, resample_distance: Math.max(10, Math.round(length * 1000 / 200)) });
     if (seq !== routeSeq) return;

@@ -61,19 +61,24 @@
 
       <div class="field-label">Que tipo de foto você mais gosta de fazer?</div>
       <div class="chips" id="styles" aria-label="Estilos de fotografia"></div>
-      <h2 class="tips-title">No caminho, fique atento a</h2>
-      <ul id="tips"></ul>
-
-      <div id="ai">
-        <h2 class="tips-title">✨ Sugestão com IA <small>roda no seu aparelho, sem enviar dados</small></h2>
+      <div id="suggest">
+        <h2 class="tips-title">Sugestões para o caminho</h2>
         <div class="field-label">Tamanho da resposta</div>
         <div class="seg seg-3" id="ai-size" role="radiogroup" aria-label="Tamanho da resposta"></div>
-        <button class="btn btn-primary" id="ai-go" type="button">✨ Sugerir com IA</button>
+        <div class="choice">
+          <button class="btn btn-choice" id="quick-go" type="button">⚡ Resposta rápida<small>na hora, por regras</small></button>
+          <button class="btn btn-choice btn-primary" id="ai-go" type="button">✨ Gerar com IA<small id="ai-go-sub">no seu aparelho</small></button>
+        </div>
         <p class="hint" id="ai-unsupported" hidden></p>
         <div id="ai-progress" hidden><div class="bar"><div id="ai-progress-bar"></div></div><small id="ai-progress-text"></small></div>
         <p class="hint" id="ai-stale" hidden>Os dados da caminhada mudaram desde este texto. Gere de novo para atualizar.</p>
         <div id="ai-out" aria-live="polite"></div>
         <p class="status" id="ai-status"></p>
+        <!-- Resposta rápida: aberta e sem cabeçalho quando escolhida; recolhida abaixo do texto quando a escolha é IA. -->
+        <details id="quick" hidden>
+          <summary>Ver resposta rápida (regras)</summary>
+          <ul id="tips"></ul>
+        </details>
       </div>
       <details id="facts-wrap">
         <summary>Dados usados nas sugestões</summary>
