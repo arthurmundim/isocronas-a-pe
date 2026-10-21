@@ -2,6 +2,16 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.6.0] - 2026-10-21
+
+### Adicionado
+- Perguntas por momento no texto da IA: "💬 Perguntar sobre este momento" mostra 3 perguntas de um banco do app (configuração, ficar de fora/entrar no lugar, enquadramento, ISO, de onde vem a luz, céu fechado, celular, estilos), reescritas pela IA para o contexto. A resposta aparece embaixo do bloco e traz 3 novas perguntas. Limite de 5 perguntas por texto gerado. Não há perguntas que mudem o horário (isso se faz no "Quando?").
+- Respostas com os dados calculados pelo app (incluindo a configuração "de fora", "de dentro" ou "com céu fechado" e o motivo). Se a IA errar duas vezes (números, equipamento, contradição técnica como "diafragma aberto" × "fechado"), o app mostra a resposta calculada no lugar do texto dela, com aviso.
+
+### Corrigido
+- Configurações de câmera por cena (street, arquitetura, água, retrato) ignoravam a luz: na blue hour/noite sugeriam valores de dia (ex.: café às 18:21 com ISO 200–800 e 1/250 s). Agora têm variante de pouca luz.
+- Um lugar a menos de 3 min da chegada era fundido no último bloco sem o nome (aparecia "fachada e torres da igreja" no bloco de um café).
+
 ## [0.5.6] - 2026-10-21
 
 ### Corrigido
@@ -108,6 +118,7 @@ Primeira versão funcional.
 - Layout responsivo: painel lateral vira bottom sheet no celular.
 - Cache em memória, filas com intervalo mínimo por API e fallback/backoff entre servidores Overpass.
 
+[0.6.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.6...v0.6.0
 [0.5.6]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.3...v0.5.4
