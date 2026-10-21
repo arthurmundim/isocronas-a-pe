@@ -11,7 +11,7 @@ Exploração urbana a pé: busque um endereço, CEP ou lugar (ou clique no mapa)
 
 Dicas de uso:
 - A mancha mostra as ruas alcançáveis, coloridas pelo tempo. Clique **dentro** dela para ver a rota a pé e o perfil de elevação; clique **fora** (ou arraste o pin, ou use o clique direito) para mudar o ponto.
-- Para um número exato, digite "Rua X 123" e tecle Enter. Se o número não estiver no OpenStreetMap, o pin fica na rua e dá para arrastar.
+- Digite o endereço, lugar ou CEP e clique em **Buscar** (ou Enter): aparecem as opções e você escolhe uma. Com número ("Rua X 123"), o número exato vem marcado no topo; se ele não estiver no OpenStreetMap, escolha a rua e arraste o pin.
 - Escolha o ritmo (Fotografando, Passeio, Normal, Apressado) e ligue "Evitar ladeiras" se quiser priorizar ruas planas.
 - O painel avança em etapas: cada uma concluída vira uma linha de resumo (clique para editar). Com a rota aberta, escolha o dia e "Sair às" ou "Chegar às" (ou um atalho como "Chegar: Golden tarde") e marque os estilos de foto que você gosta: o app sugere o que observar no caminho (contraluz, fachadas iluminadas, corredores de luz, lugares perto da rota). As linhas do sol passam a sair do destino.
 - Em "Sugestões para o caminho", escolha o tamanho e depois "⚡ Resposta rápida" (dicas por regras, na hora) ou "✨ Gerar com IA", que escreve um texto de amigo fotógrafo sobre a caminhada, com as configurações de câmera de cada momento. Roda no seu aparelho, sem enviar dados; na primeira vez baixa o modelo (~0,9 GB).

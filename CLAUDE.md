@@ -40,8 +40,8 @@ Código executado no carregamento só pode usar o que foi definido em arquivos a
 |---|---|---|
 | OpenFreeMap (`tiles.openfreemap.org`) | Basemap (estilos `positron` claro / `dark`) | Gratuito, sem key |
 | BrasilAPI `/api/cep/v2/{cep}` | Busca por CEP | Sem key; uso razoável |
-| Photon (`photon.komoot.io`) | Autocomplete de texto livre | Uso justo; debounce 400 ms |
-| Nominatim (`nominatim.openstreetmap.org`) | Só fallback de CEP sem coordenadas | **Máx 1 req/s, proibido para autocomplete** |
+| Photon (`photon.komoot.io`) | Busca de texto livre (só ao clicar "Buscar") e nome das ruas dos trechos (reverse) | Uso justo |
+| Nominatim (`nominatim.openstreetmap.org`) | Rua de um CEP e número exato, só em busca explícita (botão "Buscar") | **Máx 1 req/s, nunca enquanto digita** |
 | Valhalla (`valhalla1.openstreetmap.de`) | `/isochrone` (polígonos, para a lógica), `/expansion` (ruas alcançáveis, para o desenho; ~700 KB para 20 min), `/route`, `/height` (pedestrian) | Servidor público FOSSGIS, compartilhado; evitar rajadas |
 | Overpass (`overpass-api.de`, fallback `maps.mail.ru`) | Pontos para fotografar dentro do bbox da maior isócrona | Compartilhado e frequentemente lotado; 1 consulta por vez, 3 rodadas com backoff 2/4 s |
 | Open-Meteo (`api.open-meteo.com`) | Cobertura de nuvens horária (3 dias) + fuso IANA do ponto | Sem key, uso não comercial |
@@ -52,7 +52,7 @@ Todas as chamadas passam por um cache em memória (chave = URL + body). Erros de
 ## Decisões
 
 - **CEP**: o BrasilAPI devolve coordenadas do centro da cidade (ex.: CEP da Av. Paulista → Sé). Quando há rua, geocodificamos `rua + cidade` no Nominatim (busca estruturada); as coordenadas do BrasilAPI só entram como aproximação se o Nominatim falhar.
-- **Número da casa**: o Photon só acerta números mapeados e às vezes troca a rua (ex.: "Rua Augusta 1500" → "Rua Cônego Valadão 1500"); reordenamos por número + rua batendo com o texto. Com número, o Enter faz uma busca explícita no Nominatim (permitido; autocomplete não). Se o número não existir, usamos o Photon com a rua sem número (o viés de localização dele acerta a homônima certa) e avisamos para arrastar o pin.
+- **Busca**: nada é consultado enquanto se digita. O botão "Buscar" (ou Enter) consulta Photon e, havendo número, o Nominatim (que interpola números) em paralelo; CEP vai ao BrasilAPI. Resultado = lista de opções no painel (número exato marcado no topo); o pin só muda quando a pessoa escolhe. O Photon às vezes troca a rua ("Rua Augusta 1500" → "Rua Cônego Valadão 1500"), por isso o "exato" exige número e rua batendo com o texto. Sem número mapeado, entram opções da rua sem número (viés de localização do Photon), avisando para arrastar o pin.
 - **Ritmo**: perfis em `CONFIG.paces` (2,5 / 3,5 / 4,5 / 5,5 km/h); `v` na URL encaixa no perfil mais próximo.
 - **Ladeiras**: liga/desliga; desligado = `use_hills` 0,5 (padrão equilibrado do Valhalla), ligado = 1. Na URL, `h=1` só quando ligado.
 - **Loading**: `cached()` conta requisições pendentes (incluindo fila e retries) para a barra global `#busy`; `setStatus(id, msg, 'loading')` mostra spinner.

@@ -2,6 +2,14 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.5.2] - 2026-10-21
+
+### Alterado
+- A busca só começa ao clicar em "Buscar" (ou Enter): aparecem as opções no painel e você escolhe uma. Nada é selecionado sozinho, nem com um único resultado; o número exato vem marcado no topo.
+
+### Corrigido
+- Ao escolher um ponto, a área aparecia como "círculo" por ~2 s antes das ruas carregarem; agora só as ruas aparecem (a área fica como fallback se elas falharem).
+
 ## [0.5.1] - 2026-10-21
 
 ### Corrigido
@@ -71,6 +79,7 @@ Primeira versão funcional.
 - Layout responsivo: painel lateral vira bottom sheet no celular.
 - Cache em memória, filas com intervalo mínimo por API e fallback/backoff entre servidores Overpass.
 
+[0.5.2]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.3.0...v0.4.0
