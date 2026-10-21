@@ -343,6 +343,7 @@ async function aiGenerate() {
   setStatus('ai-status', '');
   reveal(aiState.engine ? '#ai-stop' : '#ai-progress');
   try {
+    await qaState.pending; // pré-aquecimento das perguntas ainda rodando: o motor atende um por vez
     const engine = await aiEngine();
     setStatus('ai-status', 'Escrevendo…', 'loading');
     reveal('#ai-out');
@@ -373,6 +374,7 @@ async function aiGenerate() {
     const secs = ((performance.now() - t0) / 1000).toFixed(0);
     const warn = issues.length ? ` ⚠️ Atenção: ${issues.join('; ')}. Confira na resposta rápida abaixo.` : ' Modelo pequeno: confira na resposta rápida abaixo.';
     setStatus('ai-status', `Gerado no seu aparelho em ${secs} s.${warn}`, issues.length ? 'error' : null);
+    qaWarmup(); // prepara o formato das respostas das perguntas em segundo plano
   } catch (e) {
     console.error('IA', e);
     const msg = /device.*lost|out of memory|OOM|allocate/i.test(String(e?.message || e))
