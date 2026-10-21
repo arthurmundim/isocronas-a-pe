@@ -2,6 +2,12 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.5.3] - 2026-10-21
+
+### Alterado
+- Etapas futuras não aparecem mais antes da hora: na Caminhada, só ela fica aberta. Depois do "Continuar", o painel espera os pontos carregarem no mapa (mostrando o progresso do Overpass) e só então abre "Pontos para fotografar", onde se escolhe o destino. Se demorar, após 10 s aparece "Escolher o destino sem esperar".
+- "Luz para foto" (horários de luz e nuvens) agora faz parte do "Quando?", junto com o dia e a hora, como informação para decidir o horário. A seção separada deixou de existir.
+
 ## [0.5.2] - 2026-10-21
 
 ### Alterado
@@ -79,6 +85,7 @@ Primeira versão funcional.
 - Layout responsivo: painel lateral vira bottom sheet no celular.
 - Cache em memória, filas com intervalo mínimo por API e fallback/backoff entre servidores Overpass.
 
+[0.5.3]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.4.0...v0.5.0
