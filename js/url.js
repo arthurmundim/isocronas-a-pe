@@ -14,6 +14,7 @@ function parseHash() {
   if (p.has('cat')) out.cats = new Set(p.get('cat').split(',').filter((c) => CATEGORIES.some((x) => x.id === c)));
   if (/^\d{4}-\d{2}-\d{2}$/.test(p.get('d') || '')) out.date = p.get('d');
   out.style = p.get('s') === 'dark' ? 'dark' : 'light';
+  if (p.has('f')) out.styles = new Set(p.get('f').split(',').filter((id) => PHOTO_STYLES.some((s) => s.id === id)));
   return out;
 }
 function applyHashToState(h) {
@@ -22,6 +23,7 @@ function applyHashToState(h) {
   state.hills = h.hills ?? 0.5;
   state.cats = h.cats || new Set(CATEGORIES.map((c) => c.id));
   state.date = h.date || todayStr();
+  state.styles = h.styles || loadStoredStyles();
   state.style = h.style;
 }
 function syncControls() {
@@ -46,6 +48,7 @@ function writeHash() {
     if (state.cats.size !== CATEGORIES.length) p.set('cat', [...state.cats].join(','));
     if (state.date !== todayStr()) p.set('d', state.date);
     if (state.style !== 'light') p.set('s', state.style);
+    if (state.styles.size) p.set('f', [...state.styles].join(','));
     lastHash = p.toString().replace(/%2C/g, ',');
     try { history.replaceState(null, '', '#' + lastHash); } catch { location.hash = lastHash; }
   }, 300);

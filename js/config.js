@@ -40,7 +40,23 @@ const state = {
   pois: [],             // pontos dentro da maior isócrona: { id, cat, name, lng, lat, ring, tags, osm }
   date: null,           // 'YYYY-MM-DD' para a luz do dia (padrão: hoje)
   tz: null,             // fuso IANA do ponto (vem do Open-Meteo); null = fuso do navegador
+  weather: null,        // resposta do Open-Meteo (nuvens horárias, 3 dias)
+  trip: null,           // rota atual: { target, dest, time (s), length (km), line, maneuvers, elev }
+  depart: { mode: 'leave', time: null }, // "sair às" / "chegar às" + 'HH:MM' no fuso do lugar
+  styles: new Set(),    // estilos de foto preferidos (ids de PHOTO_STYLES)
 };
+
+// ==== ESTILOS DE FOTOGRAFIA ====
+const PHOTO_STYLES = [
+  { id: 'street', label: 'Street', emoji: '🚶' },
+  { id: 'arquitetura', label: 'Arquitetura', emoji: '🏛️' },
+  { id: 'paisagem', label: 'Paisagem urbana', emoji: '🌆' },
+  { id: 'retrato', label: 'Retrato', emoji: '🧑' },
+  { id: 'noturna', label: 'Noturna / luzes', emoji: '🌃' },
+  { id: 'minimal', label: 'Minimalismo / sombras', emoji: '◼️' },
+  { id: 'natureza', label: 'Natureza urbana', emoji: '🌿' },
+  { id: 'arte', label: 'Arte urbana', emoji: '🎨' },
+];
 
 // ==== CATEGORIAS DE PONTOS ====
 // Ordem = prioridade quando um elemento casa com mais de uma (ex.: igreja histórica → patrimônio).

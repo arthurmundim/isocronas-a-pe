@@ -17,7 +17,7 @@ function updateLight() {
   if (!state.date) state.date = todayStr();
   $('#date').value = state.date;
   if (!state.point) { $('#sun-table').innerHTML = ''; $('#sun-tz').textContent = 'Escolha um ponto.'; return; }
-  const { lat, lng } = state.point;
+  const { lat, lng } = lightAnchor();
   const t = sunTimes(state.date, lat, lng);
   const rise = valid(t.sunrise) ? sunBearing(t.sunrise, lat, lng) : null;
   const set = valid(t.sunset) ? sunBearing(t.sunset, lat, lng) : null;
@@ -30,7 +30,7 @@ function updateLight() {
     ['#6366f1', 'Blue hour (noite)', fmtRange(t.blueHourStart, t.dusk)],
   ];
   $('#sun-table').innerHTML = rows.map(([c, k, v]) => `<tr><th><span class="sw" style="background:${c}"></span>${k}</th><td>${v}</td></tr>`).join('');
-  $('#sun-tz').textContent = `Horários no fuso ${tzName()}. Linhas no mapa: direção do sol no nascer (laranja) e no pôr (vermelho).`;
+  $('#sun-tz').textContent = `Horários no fuso ${tzName()}, para ${state.routeTarget ? 'o destino da rota' : 'o pin'}. Linhas no mapa: direção do sol no nascer (laranja) e no pôr (vermelho).`;
   drawSunLines();
 }
 
@@ -43,15 +43,20 @@ registerOverlay(() => {
     paint: { 'text-color': ['match', ['get', 'kind'], 'rise', '#b45309', '#be123c'], 'text-halo-color': '#fff', 'text-halo-width': 1.5 } });
 });
 
+// Referência da luz: o destino clicado, se houver rota; senão o pin.
+const lightAnchor = () => state.routeTarget || state.point;
+
 function drawSunLines() {
-  if (!state.point) return setSourceData('sun', EMPTY);
-  const { lat, lng } = state.point;
+  const anchor = lightAnchor();
+  if (!anchor) return setSourceData('sun', EMPTY);
+  const { lat, lng } = anchor;
   const t = sunTimes(state.date || todayStr(), lat, lng);
   const origin = [lng, lat];
-  // Comprimento: até a borda da maior isócrona (mínimo 800 m).
+  // Comprimento: até a borda da maior isócrona (mínimo 800 m); a partir do destino, um raio fixo.
   const outer = state.iso?.features[0];
   let km = 1.5;
-  if (outer) {
+  if (state.routeTarget) km = 0.9;
+  else if (outer) {
     const [w, s, e, n] = turf.bbox(outer);
     km = Math.max(0.8, ...[[w, s], [e, s], [w, n], [e, n]].map((c) => turf.distance(origin, c) * 0.8));
   }
@@ -66,6 +71,7 @@ function drawSunLines() {
 $('#date').addEventListener('change', (e) => {
   state.date = e.target.value || todayStr();
   updateLight();
+  if (state.trip) renderTrip();
   onStateChanged();
 });
 
@@ -83,8 +89,10 @@ async function loadClouds() {
     if (seq !== cloudSeq) return;
     const tzChanged = state.tz !== data.timezone;
     state.tz = data.timezone;
+    state.weather = data;
     if (tzChanged) updateLight(); // reformatar horários no fuso do lugar
     renderClouds(data);
+    if (state.trip) renderTrip(); // nuvens na chegada entram nas dicas
     setStatus('cloud-status', 'Fonte: Open-Meteo. Nuvens altas podem render um céu colorido; baixas tendem a bloquear o sol.');
   } catch (e) {
     if (seq !== cloudSeq) return;
@@ -93,22 +101,24 @@ async function loadClouds() {
   }
 }
 
-function renderClouds(data) {
+// Média de nuvens (total/baixas/altas, %) entre dois instantes, ou null fora dos 3 dias de previsão.
+function cloudsBetween(a, b, data = state.weather) {
+  if (!data || !valid(a) || !valid(b)) return null;
   const { time, cloud_cover: cc, cloud_cover_low: low, cloud_cover_high: high } = data.hourly;
-  const idx = new Map(time.map((t, i) => [t, i]));
   // 'sv-SE' formata como "YYYY-MM-DD HH:MM", igual às chaves horárias do Open-Meteo.
   const hourKey = (d) => new Intl.DateTimeFormat('sv-SE', { timeZone: tzName(), year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' })
     .format(d).replace(' ', 'T') + ':00';
-  const avgIn = (a, b) => {
-    if (!valid(a) || !valid(b)) return null;
-    const ids = new Set();
-    for (let t = a.getTime(); t <= b.getTime(); t += 15 * 60e3) { const i = idx.get(hourKey(new Date(t))); if (i != null) ids.add(i); }
-    if (!ids.size) return null;
-    const mean = (arr) => Math.round([...ids].reduce((s, i) => s + (arr[i] ?? 0), 0) / ids.size);
-    return { total: mean(cc), low: mean(low), high: mean(high) };
-  };
+  const ids = new Set();
+  for (let t = a.getTime(); t <= b.getTime(); t += 15 * 60e3) { const i = time.indexOf(hourKey(new Date(t))); if (i >= 0) ids.add(i); }
+  if (!ids.size) return null;
+  const mean = (arr) => Math.round([...ids].reduce((s, i) => s + (arr[i] ?? 0), 0) / ids.size);
+  return { total: mean(cc), low: mean(low), high: mean(high) };
+}
+
+function renderClouds(data) {
+  const { time } = data.hourly;
   const cell = (a, b) => {
-    const c = avgIn(a, b);
+    const c = cloudsBetween(a, b, data);
     if (!c) return '<td>—</td>';
     const cls = c.total < 30 ? 'clear' : c.total < 70 ? 'partial' : 'overcast';
     return `<td>${fmtRange(a, b)} <span class="cloud ${cls}" title="baixas ${c.low}% · altas ${c.high}%">${c.total}%</span></td>`;

@@ -108,7 +108,7 @@ function setIsoStale(on) {
 
 const debouncedRecompute = debounce(() => {
   computeIsochrones();
-  if (state.routeTarget) showRoute(state.routeTarget.lat, state.routeTarget.lng);
+  if (state.routeTarget) showRoute(state.routeTarget.lat, state.routeTarget.lng, state.trip?.dest);
   onStateChanged();
 }, 400);
 function recomputeIso() {

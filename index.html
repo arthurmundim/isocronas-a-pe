@@ -46,6 +46,29 @@
     <div class="row"><span id="route-summary" style="flex:1"></span><button class="btn" id="route-clear" type="button">Limpar</button></div>
     <canvas id="elev" height="120" aria-label="Perfil de elevação"></canvas>
     <p class="status" id="route-status"></p>
+
+    <div id="trip" hidden>
+      <div class="field-label">Quando?</div>
+      <div class="row">
+        <div class="seg seg-2" id="trip-mode" role="radiogroup" aria-label="Sair ou chegar">
+          <button type="button" role="radio" data-mode="leave">Sair às</button>
+          <button type="button" role="radio" data-mode="arrive">Chegar às</button>
+        </div>
+        <input type="time" id="trip-time" aria-label="Horário">
+      </div>
+      <div class="chips" id="trip-quick" aria-label="Atalhos de horário"></div>
+      <p class="trip-result" id="trip-result"></p>
+
+      <div class="field-label">Que tipo de foto você mais gosta de fazer?</div>
+      <div class="chips" id="styles" aria-label="Estilos de fotografia"></div>
+      <h2 class="tips-title">No caminho, fique atento a</h2>
+      <ul id="tips"></ul>
+      <details id="facts-wrap">
+        <summary>Dados usados nas sugestões</summary>
+        <pre id="facts"></pre>
+        <button class="btn" id="facts-copy" type="button">Copiar JSON</button>
+      </details>
+    </div>
   </section>
 
   <section id="sec-poi">
@@ -79,6 +102,8 @@
 <script src="js/route.js"></script>
 <script src="js/pois.js"></script>
 <script src="js/light.js"></script>
+<script src="js/trip.js"></script>
+<script src="js/tips.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

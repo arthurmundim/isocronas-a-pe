@@ -11,13 +11,17 @@ registerOverlay(() => {
 });
 
 let routeSeq = 0;
-async function showRoute(lat, lng) {
+// dest: ponto de interesse clicado (opcional), usado nas dicas.
+async function showRoute(lat, lng, dest = null) {
   if (!state.point) return;
   const seq = ++routeSeq;
   state.routeTarget = { lat, lng };
+  state.trip = null;
   $('#sec-route').hidden = false;
   $('#route-summary').textContent = '';
   drawElevation([]);
+  renderTrip();
+  updateLight(); // linhas do sol e horários passam a partir do destino
   setStatus('route-status', 'Calculando rota…', 'loading');
   setSourceData('route', { type: 'FeatureCollection', features: [turf.point([lng, lat])] });
   try {
@@ -32,12 +36,17 @@ async function showRoute(lat, lng) {
     setSourceData('route', { type: 'FeatureCollection', features: [line, turf.point([lng, lat])] });
     const { time, length } = data.trip.summary;
     $('#route-summary').innerHTML = `<b>${fmtDuration(time)}</b> · ${length.toFixed(2)} km`;
+    state.trip = { target: { lat, lng }, dest, time, length, line, maneuvers: leg.maneuvers, elev: null };
+    renderTrip();
+    enrichStreetNames(state.trip);
     setStatus('route-status', 'Carregando elevação…', 'loading');
     const h = await valhalla('/height', { encoded_polyline: leg.shape, shape_format: 'polyline6', range: true, resample_distance: Math.max(10, Math.round(length * 1000 / 200)) });
     if (seq !== routeSeq) return;
     const pts = (h.range_height || []).filter((p) => p[1] != null);
     const { gain, loss } = drawElevation(pts);
     $('#route-summary').innerHTML += ` · ↑${gain} m ↓${loss} m`;
+    state.trip.elev = { pts, gain, loss };
+    renderTrip();
     setStatus('route-status', '');
   } catch (e) {
     if (seq !== routeSeq) return;
@@ -46,9 +55,12 @@ async function showRoute(lat, lng) {
 }
 function clearRoute() {
   routeSeq++;
+  const had = !!state.routeTarget;
   state.routeTarget = null;
+  state.trip = null;
   setSourceData('route', EMPTY);
   $('#sec-route').hidden = true;
+  if (had) updateLight(); // luz volta a ter o pin como referência
 }
 $('#route-clear').addEventListener('click', clearRoute);
 

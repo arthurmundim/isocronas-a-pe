@@ -57,6 +57,7 @@ const limits = {
   nominatim: limiter(1100),
   valhalla: limiter(400),
   overpass: limiter(1000),
+  photon: limiter(250),
 };
 
 async function fetchJSON(api, url, opts = {}, timeoutMs = 30000) {
@@ -95,3 +96,29 @@ const valid = (d) => d instanceof Date && !isNaN(d);
 const fmtTime = (d) => (valid(d) ? new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: tzName() }).format(d) : '—');
 const fmtRange = (a, b) => `${fmtTime(a)}–${fmtTime(b)}`;
 function todayStr() { return new Date().toLocaleDateString('sv-SE'); } // YYYY-MM-DD no fuso do navegador
+
+// Converte data 'YYYY-MM-DD' + hora 'HH:MM' no fuso IANA dado para um Date (instante absoluto).
+function tzOffsetMs(date, tz) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit',
+    day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(date).map((x) => [x.type, x.value]));
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(date.getTime() / 1000) * 1000;
+}
+function zonedDate(dateStr, hhmm, tz) {
+  const [y, m, d] = dateStr.split('-').map(Number), [H, M] = hhmm.split(':').map(Number);
+  const guess = Date.UTC(y, m - 1, d, H, M);
+  const first = guess - tzOffsetMs(new Date(guess), tz);
+  return new Date(guess - tzOffsetMs(new Date(first), tz)); // 2ª passada acerta transições de horário de verão
+}
+const deg = (rad) => (rad * 180) / Math.PI;
+// Diferença angular assinada b - a, em [-180, 180).
+const angleDiff = (a, b) => ((b - a + 540) % 360) - 180;
+
+// Estilos de foto ficam salvos no navegador (preferência pessoal) e também vão no link.
+const STYLES_KEY = 'isocronas.styles';
+function loadStoredStyles() {
+  try { return new Set(JSON.parse(localStorage.getItem(STYLES_KEY) || '[]').filter((id) => PHOTO_STYLES.some((s) => s.id === id))); }
+  catch { return new Set(); }
+}
+function saveStyles() {
+  try { localStorage.setItem(STYLES_KEY, JSON.stringify([...state.styles])); } catch { /* armazenamento indisponível */ }
+}
