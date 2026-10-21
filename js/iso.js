@@ -107,7 +107,10 @@ async function computeIsochrones() {
     state.iso = { type: 'FeatureCollection', features };
     setSourceData('iso', state.iso);
     const km2 = features.length ? (turf.area(features[0]) / 1e6).toFixed(2) : 0;
-    loadStreets(seq); // a mancha de ruas chega logo depois; até lá, a área esmaecida
+    // A mancha de ruas chega logo depois. Até lá não mostramos a área (parecia um "círculo" provisório);
+    // ela só aparece se o /expansion falhar.
+    streetsShown = true;
+    loadStreets(seq);
     setStatus('iso-status', `Em ${state.times.at(-1)} min, ritmo "${paceOf(state.speed).label}" (${state.speed} km/h)${state.hills > 0.5 ? ', evitando ladeiras' : ''}: ~${km2} km². Clique na mancha para ver a rota.`);
     if (features.length) map.fitBounds(turf.bbox(features[0]), { padding: mapPadding(), maxZoom: 16, duration: 600 });
     onIsochronesChanged();
