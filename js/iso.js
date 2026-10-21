@@ -34,12 +34,48 @@ function ringColor(i, n) {
   return ramp[n === 1 ? 0 : Math.round((i * (ramp.length - 1)) / (n - 1))];
 }
 
+// A mancha é desenhada como rede de ruas alcançáveis (Valhalla /expansion). Os polígonos de /isochrone continuam
+// sendo a base da lógica (pontos, clique "dentro da mancha") e só aparecem se as ruas falharem.
+let streetsShown = false;
 registerOverlay(() => {
   ensureSource('iso');
+  ensureSource('iso-streets');
   const before = firstSymbolLayer();
-  map.addLayer({ id: 'iso-fill', type: 'fill', source: 'iso', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.2 } }, before);
-  map.addLayer({ id: 'iso-line', type: 'line', source: 'iso', paint: { 'line-color': ['get', 'color'], 'line-width': 2, 'line-opacity': 0.9 } }, before);
+  map.addLayer({ id: 'iso-fill', type: 'fill', source: 'iso', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0 } }, before);
+  map.addLayer({ id: 'iso-line', type: 'line', source: 'iso', paint: { 'line-color': ['get', 'color'], 'line-width': 2, 'line-opacity': 0 } }, before);
+  map.addLayer({ id: 'iso-streets', type: 'line', source: 'iso-streets', layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': ['get', 'color'], 'line-opacity': 0, 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 1.2, 15, 2.5, 17, 4.5] } }, before);
+  setIsoStale(false);
 });
+
+// Ruas alcançáveis, cada uma na cor do menor anel que a alcança (mais longe primeiro, para as próximas ficarem por cima).
+async function loadStreets(seq) {
+  const { lat, lng } = state.point;
+  const max = state.times.at(-1) * 60;
+  try {
+    const data = await valhalla('/expansion', {
+      locations: [{ lat, lon: lng }], costing: 'pedestrian', costing_options: pedestrianCosting(),
+      action: 'isochrone', contours: [{ time: state.times.at(-1) }], skip_opposites: true, expansion_properties: ['duration'],
+    });
+    if (seq !== isoSeq) return;
+    const n = state.times.length;
+    const features = [];
+    for (const f of data.features) {
+      const i = state.times.findIndex((t) => f.properties.duration <= t * 60);
+      if (i < 0 || f.properties.duration > max) continue;
+      features.push({ type: 'Feature', geometry: f.geometry, properties: { ring: i, color: ringColor(i, n) } });
+    }
+    features.sort((a, b) => b.properties.ring - a.properties.ring);
+    setSourceData('iso-streets', { type: 'FeatureCollection', features });
+    streetsShown = features.length > 0;
+  } catch (e) {
+    if (seq !== isoSeq) return;
+    console.warn('expansion', e);
+    setSourceData('iso-streets', EMPTY);
+    streetsShown = false; // sem ruas: volta a mancha de área
+  }
+  setIsoStale(false);
+}
 
 function renderLegend() {
   const n = state.times.length;
@@ -71,7 +107,7 @@ async function computeIsochrones() {
     state.iso = { type: 'FeatureCollection', features };
     setSourceData('iso', state.iso);
     const km2 = features.length ? (turf.area(features[0]) / 1e6).toFixed(2) : 0;
-    setIsoStale(false);
+    loadStreets(seq); // a mancha de ruas chega logo depois; até lá, a área esmaecida
     setStatus('iso-status', `Em ${state.times.at(-1)} min, ritmo "${paceOf(state.speed).label}" (${state.speed} km/h)${state.hills > 0.5 ? ', evitando ladeiras' : ''}: ~${km2} km². Clique na mancha para ver a rota.`);
     if (features.length) map.fitBounds(turf.bbox(features[0]), { padding: mapPadding(), maxZoom: 16, duration: 600 });
     onIsochronesChanged();
@@ -79,6 +115,7 @@ async function computeIsochrones() {
     if (seq !== isoSeq) return;
     state.iso = null;
     setSourceData('iso', EMPTY);
+    setSourceData('iso-streets', EMPTY);
     setIsoStale(false);
     setStatus('iso-status', e.message, true);
     toast('Isócronas: ' + e.message);
@@ -101,9 +138,12 @@ function ringOf(lng, lat) {
 }
 
 // Mancha esmaecida enquanto recalcula, para não parecer resultado final.
+// Com ruas: só as ruas (claras, para a rota escura destacar). Sem ruas: a área, como fallback.
 function setIsoStale(on) {
-  if (map.getLayer('iso-fill')) map.setPaintProperty('iso-fill', 'fill-opacity', on ? 0.07 : 0.2);
-  if (map.getLayer('iso-line')) map.setPaintProperty('iso-line', 'line-opacity', on ? 0.35 : 0.9);
+  if (!map.getLayer('iso-streets')) return;
+  map.setPaintProperty('iso-streets', 'line-opacity', streetsShown ? (on ? 0.15 : 0.55) : 0);
+  map.setPaintProperty('iso-fill', 'fill-opacity', streetsShown ? 0 : on ? 0.07 : 0.2);
+  map.setPaintProperty('iso-line', 'line-opacity', streetsShown ? 0 : on ? 0.35 : 0.9);
 }
 
 const debouncedRecompute = debounce(() => {
