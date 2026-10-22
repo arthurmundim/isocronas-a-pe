@@ -159,7 +159,8 @@ async function computeIsochrones() {
     streetsShown = true;
     loadStreets(seq);
     setStatus('iso-status', `Em ${state.times.at(-1)} min, ritmo "${paceOf(state.speed).label}" (${state.speed} km/h)${state.hills > 0.5 ? ', evitando ladeiras' : ''}: ~${km2} km². Clique na mancha para ver a rota.`);
-    if (features.length) map.fitBounds(turf.bbox(features[0]), { padding: mapPadding(), maxZoom: 16, duration: 600 });
+    // Com rota aberta (recálculo ou link com destino) o enquadramento fica com a rota.
+    if (features.length && !state.routeTarget) sheetPeek().then(() => map.fitBounds(turf.bbox(features[0]), { padding: mapPadding(), maxZoom: 16, duration: 600 }));
     onIsochronesChanged();
   } catch (e) {
     if (seq !== isoSeq) return;
@@ -168,7 +169,7 @@ async function computeIsochrones() {
     setSourceData('iso-streets', EMPTY);
     setIsoStale(false);
     setStatus('iso-status', e.message, true);
-    toast('Isócronas: ' + e.message);
+    toast('Área a pé: ' + e.message);
     opEnd('walk');
   }
 }

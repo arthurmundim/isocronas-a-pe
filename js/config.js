@@ -16,7 +16,9 @@ const CONFIG = {
     { v: 4.5, label: 'Normal', hint: 'Caminhada convencional de quem vai a algum lugar.' },
     { v: 5.5, label: 'Apressado', hint: 'Passo rápido, quase atrasado.' },
   ],
-  ringColors: ['#1a9850', '#91cf60', '#fee08b', '#fc8d59', '#d73027'],
+  // Do mais perto (ciano claro) ao mais longe (magenta escuro): sem verde x vermelho (daltonismo) e sem "vermelho = ruim".
+  // A diferença de claridade entre os anéis também ajuda quem não distingue matizes.
+  ringColors: ['#5fd3e6', '#2aa6c4', '#6f6fd0', '#9d4fb8', '#7a1f78'],
   overpass: [ // tentados em ordem, com backoff exponencial entre rodadas (servidores públicos vivem lotados)
     'https://overpass-api.de/api/interpreter',
     'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
@@ -26,6 +28,9 @@ const CONFIG = {
   brasilApiCep: 'https://brasilapi.com.br/api/cep/v2/',
   nominatim: 'https://nominatim.openstreetmap.org/search',
 };
+
+// "?debug" na URL mostra os dados usados nas sugestões (JSON).
+const DEBUG = new URLSearchParams(location.search).has('debug');
 
 // ==== ESTADO ====
 const state = {

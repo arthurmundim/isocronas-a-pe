@@ -1,8 +1,8 @@
 'use strict';
 // ==== FLUXO EM ETAPAS ====
-// search → walk → pois (aparece só depois que os pontos carregam no mapa; ali se escolhe o destino) → when (data, hora
-// e luz/nuvens do dia) → styles → suggest. Concluir uma etapa a minimiza numa linha de resumo clicável (reabre para
-// editar) e abre a próxima; etapas futuras ficam ocultas.
+// search → walk → pois (aparece só depois que os pontos carregam no mapa; ali se escolhe o destino) → when (data, hora,
+// luz/nuvens do dia e estilos de foto) → suggest. Concluir uma etapa a minimiza numa linha de resumo clicável (reabre
+// para editar) e abre a próxima; etapas futuras ficam ocultas.
 const stepEl = (n) => document.querySelector(`.step[data-step="${n}"]`);
 const fmtDay = (d) => d.split('-').reverse().slice(0, 2).join('/');
 const fmtNum = (x) => String(x).replace('.', ',');
@@ -12,10 +12,11 @@ const STEP_SUMMARY = {
   walk: () => `🚶 até ${state.times.join('/')} min · ${paceOf(state.speed).label} (${fmtNum(state.speed)} km/h)${state.hills > 0.5 ? ' · evitando ladeiras' : ''}`,
   when: () => {
     const t = tripTimes();
-    return t ? `🕒 ${fmtDay(state.date)} · sai ${hhmm(t.leave)} → chega ${hhmm(t.arrive)}` : '🕒 escolha o horário';
+    const styles = PHOTO_STYLES.filter((s) => state.styles.has(s.id)).map((s) => s.label).join(', ');
+    return (t ? `🕒 ${fmtDay(state.date)} · sai ${hhmm(t.leave)} → chega ${hhmm(t.arrive)}` : '🕒 escolha o horário') +
+      (styles ? ` · 📷 ${esc(styles)}` : '');
   },
-  styles: () => `📷 ${esc(PHOTO_STYLES.filter((s) => state.styles.has(s.id)).map((s) => s.label).join(', ') || 'sem preferência de estilo')}`,
-  suggest: () => `${aiState.mode === 'ai' ? '✨ Texto com IA' : '⚡ Resposta rápida'} · ${AI.sizes[aiState.size].label}`,
+  suggest: () => `${aiState.mode === 'ai' ? '✨ Roteiro com IA' : '⚡ Dicas rápidas'} · ${AI.sizes[aiState.size].label}`,
   pois: () => (poiLoading ? '📸 Pontos para fotografar: carregando…' : `📸 ${state.pois.length} pontos para fotografar na área`),
   route: () => `🗺️ Rota até ${esc((state.trip && buildFacts()?.destino.nome) || 'o destino')} · ${esc($('#route-summary').textContent || 'calculando…')}`,
 };
@@ -47,7 +48,7 @@ function hideStep(n) {
 }
 
 // "Continuar" de cada etapa.
-const NEXT_STEP = { when: 'styles', styles: 'suggest' };
+const NEXT_STEP = { when: 'suggest' };
 let awaitingPois = false; // Caminhada concluída, esperando os pontos carregarem para abrir a etapa de destino
 function completeStep(n) {
   collapseStep(n);
@@ -115,7 +116,6 @@ function flowRouteStart() {
   collapseStep('pois');
   openStep('route');
   openStep('when');
-  hideStep('styles');
   hideStep('suggest');
 }
 function flowRouteCleared() {
@@ -160,7 +160,7 @@ function setFocus(on, { fit = true } = {}) {
   mapFocus.on = on;
   if (on) mapFocus.ids = focusIds();
   applyFocus();
-  if (on && fit && state.trip?.line) map.fitBounds(turf.bbox(state.trip.line), { padding: mapPadding(), maxZoom: 17, duration: 700 });
+  if (on && fit && state.trip?.line) sheetPeek().then(() => map.fitBounds(turf.bbox(state.trip.line), { padding: mapPadding(), maxZoom: 17, duration: 700 }));
 }
 // Sugestão na tela: liga o foco. Sai ao trocar de ponto, de destino ou de sugestão.
 function flowSuggestionShown() {
@@ -172,22 +172,13 @@ function focusReset() {
   setFocus(false, { fit: false });
 }
 
-class FocusToggle {
-  onAdd() {
-    this.el = document.createElement('div');
-    this.el.className = 'maplibregl-ctrl maplibregl-ctrl-group';
-    this.el.innerHTML = '<button class="map-btn" type="button"></button>';
-    this.el.firstChild.addEventListener('click', () => setFocus(!mapFocus.on));
-    this.render();
-    return this.el;
-  }
+// Botão na coluna do mapa (map.js), visível só quando há sugestão na tela.
+const focusToggle = {
+  btn: mapTools.add('', () => setFocus(!mapFocus.on)),
   render() {
-    if (!this.el) return;
-    this.el.hidden = !mapFocus.available;
-    this.el.firstChild.textContent = mapFocus.on ? '👁 Ver tudo' : '🎯 Focar no trajeto';
-    this.el.firstChild.title = mapFocus.on ? 'Mostrar todos os pontos e a mancha colorida' : 'Destacar só o trajeto e os pontos citados';
-  }
-  onRemove() { this.el.remove(); }
-}
-const focusToggle = new FocusToggle();
-map.addControl(focusToggle, 'top-left');
+    this.btn.hidden = !mapFocus.available;
+    this.btn.textContent = mapFocus.on ? '👁 Ver tudo' : '🎯 Focar no trajeto';
+    this.btn.title = mapFocus.on ? 'Mostrar todos os pontos e a mancha colorida' : 'Destacar só o trajeto e os pontos citados';
+  },
+};
+focusToggle.render();

@@ -21,11 +21,23 @@ button, input, select { font: inherit; color: inherit; }
   width: var(--panel-w); flex: none; height: 100%; overflow-y: auto; background: var(--bg);
   border-right: 1px solid var(--border); z-index: 2; display: flex; flex-direction: column;
 }
-#panel header { padding: 14px 16px 6px; }
-#panel h1 { font-size: 18px; margin: 0; }
+#panel header { padding: 14px 16px 6px; position: sticky; top: 0; z-index: 3; background: var(--bg); }
+#panel h1 { font-size: 18px; margin: 0; flex: 1; min-width: 0; }
+#panel header .brand { display: flex; align-items: center; gap: 8px; }
 #panel header p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
+/* Depois do ponto escolhido: cabeçalho vira uma linha fina. */
+#panel.started header { padding-top: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+#panel.started header h1 { font-size: 14px; }
+#panel.started header .intro { display: none; }
+.btn-sm { padding: 3px 9px; font-size: 12.5px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+/* Dicas que só fazem sentido com mouse / com toque. */
+@media (hover: none) { .only-desktop { display: none; } }
+@media (hover: hover) { .only-touch { display: none; } }
 #sheet-handle { display: none; }
-#map { flex: 1; height: 100%; }
+#map { flex: 1; height: 100%; position: relative; }
+#map-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1; margin: 0;
+  padding: 8px 14px; border-radius: 8px; background: var(--bg); box-shadow: var(--shadow); color: var(--fg); }
 section { padding: 10px 16px 14px; border-top: 1px solid var(--border); }
 section h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
 .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
@@ -158,6 +170,9 @@ table.sun tr + tr { border-top: 1px solid var(--border); }
 
 /* ==== CONTROLES DO MAPA ==== */
 .maplibregl-ctrl-group button.map-btn { width: auto; white-space: nowrap; background: var(--bg); color: var(--fg); padding: 0 10px; font-size: 13px; }
+/* Tema, foco, glossário e tour: uma coluna só, botões da mesma largura. */
+.map-tools { display: flex; flex-direction: column; }
+.map-tools button.map-btn { width: 100%; text-align: left; }
 .maplibregl-ctrl-group { background: var(--bg); }
 :root[data-theme="dark"] .maplibregl-ctrl-icon { filter: invert(1); }
 .maplibregl-popup-content { background: var(--bg); color: var(--fg); border-radius: 8px; padding: 10px 12px; }
@@ -178,6 +193,7 @@ table.sun tr + tr { border-top: 1px solid var(--border); }
     padding-bottom: env(safe-area-inset-bottom);
   }
   #panel.expanded { height: 88vh; }
+  #panel.peek { height: 36vh; } /* mapa em destaque (mancha, rota ou foco); volta ao tocar no painel */
   #panel.collapsed { height: 112px; overflow: hidden; }
   #sheet-handle { display: block; width: 100%; height: 22px; border: 0; background: none; cursor: pointer; flex: none; }
   #sheet-handle::before { content: ""; display: block; width: 40px; height: 5px; margin: 0 auto; border-radius: 3px; background: var(--border); }
@@ -226,3 +242,27 @@ div.step + div.step, #trip > .step + #suggest { margin-top: 8px; }
 .ai-in { opacity: 0; animation: ai-in .45s ease-out forwards; }
 @keyframes ai-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .ai-in { animation: none; opacity: 1; } }
+
+/* ==== CONFIRMAR DOWNLOAD DA IA ==== */
+.ai-confirm { margin-top: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--accent); background: var(--bg-2); }
+.ai-confirm p { margin: 0 0 6px; line-height: 1.45; }
+
+/* ==== GLOSSÁRIO ==== */
+#glossary { width: min(520px, calc(100vw - 32px)); max-height: min(80vh, 640px); padding: 0; border: 1px solid var(--border);
+  border-radius: 12px; background: var(--bg); color: var(--fg); box-shadow: var(--shadow); }
+#glossary::backdrop { background: rgba(0,0,0,.4); }
+.dlg-head { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 12px 16px; background: var(--bg); border-bottom: 1px solid var(--border); }
+.dlg-head h2 { margin: 0; font-size: 16px; text-transform: none; letter-spacing: 0; color: var(--fg); }
+#glossary-list { margin: 0; padding: 4px 16px 16px; }
+#glossary-list dt { font-weight: 600; margin-top: 12px; }
+#glossary-list dd { margin: 2px 0 0; color: var(--muted); line-height: 1.45; }
+
+/* ==== TOUR GUIADO ==== */
+#tour { position: fixed; inset: 0; z-index: 70; }
+#tour-hole { position: fixed; border-radius: 10px; box-shadow: 0 0 0 9999px rgba(0,0,0,.5); transition: all .25s ease; pointer-events: none; }
+#tour-card { position: fixed; width: min(320px, calc(100vw - 24px)); padding: 12px 14px; border-radius: 10px; background: var(--bg);
+  color: var(--fg); box-shadow: var(--shadow); transition: top .25s ease, left .25s ease; }
+#tour-card p { margin: 0 0 8px; line-height: 1.5; }
+#tour-card .row { margin: 0; }
+#tour-count { flex: 1; color: var(--muted); }

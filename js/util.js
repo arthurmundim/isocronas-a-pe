@@ -25,6 +25,9 @@ function setStatus(id, msg, kind = null) {
 class ApiError extends Error {
   constructor(api, msg, status) { super(msg); this.api = api; this.status = status; }
 }
+// Nome do serviço nas mensagens: o que ele faz para a pessoa, não o nome do servidor.
+const API_LABEL = { Valhalla: 'Cálculo de caminhos', Overpass: 'Pontos do mapa', Photon: 'Busca de endereços',
+  Nominatim: 'Busca de endereços', BrasilAPI: 'Busca de CEP', 'Open-Meteo': 'Previsão do tempo' };
 
 // Cache em memória por chave (URL + body). Guarda a Promise, então chamadas idênticas simultâneas compartilham a mesma requisição.
 // Conta também a espera nas filas e os retries, para a barra global refletir tudo que está pendente.
@@ -110,12 +113,13 @@ async function fetchJSON(api, url, opts = {}, timeoutMs = 30000) {
   const timer = setTimeout(() => ctrl.abort('timeout'), timeoutMs);
   if (!fetchCtrls.has(api)) fetchCtrls.set(api, new Set());
   fetchCtrls.get(api).add(ctrl);
+  const label = API_LABEL[api] || api;
   let res;
   try {
     res = await fetch(url, { ...opts, signal: ctrl.signal });
   } catch (e) {
-    if (ctrl.signal.reason === 'cancel') throw Object.assign(new ApiError(api, `${api}: cancelado`), { cancelled: true });
-    throw new ApiError(api, e.name === 'AbortError' ? `${api}: tempo esgotado` : `${api}: sem conexão ou bloqueado`);
+    if (ctrl.signal.reason === 'cancel') throw Object.assign(new ApiError(api, `${label}: cancelado`), { cancelled: true });
+    throw new ApiError(api, e.name === 'AbortError' ? `${label}: demorou demais para responder` : `${label}: sem conexão com a internet ou serviço fora do ar`);
   } finally { clearTimeout(timer); fetchCtrls.get(api).delete(ctrl); }
   let body = null;
   try { body = await res.json(); } catch { /* corpo não-JSON */ }
@@ -123,12 +127,12 @@ async function fetchJSON(api, url, opts = {}, timeoutMs = 30000) {
     let detail = String(body?.error || body?.message || '');
     if (/edges|location/i.test(detail)) detail = 'nenhuma rua caminhável perto desse ponto';
     else if (detail.length > 90) detail = detail.slice(0, 90) + '…';
-    const msg = res.status === 429 ? `${api}: muitas requisições, tente em instantes`
-      : res.status >= 500 ? `${api}: servidor indisponível (${res.status})`
-      : `${api}: erro ${res.status}${detail ? ' – ' + detail : ''}`;
+    const msg = res.status === 429 ? `${label}: muitos pedidos agora, tente em instantes`
+      : res.status >= 500 ? `${label}: serviço fora do ar no momento`
+      : `${label}: não funcionou${detail ? ' – ' + detail : ''}`;
     throw new ApiError(api, msg, res.status);
   }
-  if (body == null) throw new ApiError(api, `${api}: resposta inválida`);
+  if (body == null) throw new ApiError(api, `${label}: resposta inesperada`);
   return body;
 }
 

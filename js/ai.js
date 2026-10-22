@@ -6,11 +6,11 @@ const AI = {
   lib: 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.85/+esm',
   models: { f16: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC', f32: 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC' },
   downloadMB: 900,
-  // Tempo de leitura → quantos momentos entram no texto da IA (~2 frases cada), quantas dicas na resposta rápida e teto de tokens.
+  // Tamanho → quantos momentos entram no texto da IA (~2 frases cada), quantas dicas rápidas e teto de tokens.
   sizes: {
-    curto: { label: 'Curto', read: '~20 s de leitura', moments: 3, tips: 3, maxTokens: 240 },
-    medio: { label: 'Médio', read: '~40 s', moments: 4, tips: 5, maxTokens: 330 },
-    longo: { label: 'Longo', read: '~1 min', moments: 6, tips: 8, maxTokens: 500 },
+    curto: { label: 'Curto', moments: 3, tips: 3, maxTokens: 240 },
+    medio: { label: 'Médio', moments: 4, tips: 5, maxTokens: 330 },
+    longo: { label: 'Longo', moments: 6, tips: 8, maxTokens: 500 },
   },
 };
 // mode: null (nada escolhido ainda), 'quick' (resposta rápida) ou 'ai'.
@@ -21,7 +21,7 @@ try { aiState.size = localStorage.getItem('isocronas.aiSize') || 'medio'; } catc
 async function aiSupport() {
   if (aiState.unsupported !== null) return aiState.unsupported;
   let reason = null;
-  if (!navigator.gpu) reason = 'este navegador não tem WebGPU. Use Chrome ou Edge atualizados (no Android, Chrome).';
+  if (!navigator.gpu) reason = 'este navegador não roda IA no aparelho (falta WebGPU). Use Chrome ou Edge atualizados (no Android, Chrome).';
   else {
     const adapter = await navigator.gpu.requestAdapter().catch(() => null);
     if (!adapter) reason = 'a GPU deste aparelho não está disponível para o navegador.';
@@ -295,18 +295,31 @@ function renderAiOut(text, done, moments, { animate = false } = {}) {
 }
 async function renderAiControls() {
   $('#ai-size').innerHTML = Object.entries(AI.sizes).map(([k, s]) =>
-    `<button type="button" role="radio" aria-checked="${k === aiState.size}" data-size="${k}">${s.label}<small>${s.read}</small></button>`).join('');
+    `<button type="button" role="radio" aria-checked="${k === aiState.size}" data-size="${k}">${s.label}<small>${s.tips} dicas · ${s.moments} momentos</small></button>`).join('');
   $('#quick-go').setAttribute('aria-pressed', String(aiState.mode === 'quick'));
   $('#ai-go').setAttribute('aria-pressed', String(aiState.mode === 'ai'));
 
   const reason = await aiSupport();
   // Sem suporte, o botão continua visível (desativado) com o motivo, para não parecer que sumiu.
   $('#ai-unsupported').hidden = !reason;
-  $('#ai-unsupported').textContent = reason ? `IA indisponível: ${reason} A resposta rápida continua disponível.` : '';
+  $('#ai-unsupported').textContent = reason ? `IA indisponível: ${reason} As dicas rápidas continuam disponíveis.` : '';
   $('#ai-go').disabled = !!reason;
   const ready = aiState.engine || aiModelCached();
-  $('#ai-go').innerHTML = `✨ Gerar com IA<small>${reason ? 'indisponível neste navegador'
-    : ready ? 'no seu aparelho' : `baixa ~${(AI.downloadMB / 1000).toFixed(1).replace('.', ',')} GB na 1ª vez`}</small>`;
+  $('#ai-go').innerHTML = `✨ Roteiro com IA<small>${reason ? 'indisponível neste navegador'
+    : ready ? 'texto por horário, ~1 min' : `texto por horário · baixa ~${(AI.downloadMB / 1000).toFixed(1).replace('.', ',')} GB na 1ª vez`}</small>`;
+}
+
+// Na primeira vez, o download do modelo (~0,9 GB) só começa depois de a pessoa confirmar.
+function aiConfirmDownload() {
+  if (aiState.engine || aiModelCached()) return Promise.resolve(true);
+  const box = $('#ai-confirm');
+  box.hidden = false;
+  reveal(box, 'nearest');
+  return new Promise((resolve) => {
+    const done = (ok) => { box.hidden = true; $('#ai-confirm-yes').onclick = $('#ai-confirm-no').onclick = null; resolve(ok); };
+    $('#ai-confirm-yes').onclick = () => done(true);
+    $('#ai-confirm-no').onclick = () => done(false);
+  });
 }
 
 // Escolha entre resposta rápida (regras) e IA. Antes da escolha, nenhuma sugestão aparece.
@@ -318,7 +331,7 @@ function setSuggestMode(mode) {
   quick.open = mode === 'quick';
   for (const id of ['#ai-out', '#ai-status']) $(id).hidden = mode !== 'ai';
   if (mode !== 'ai') $('#ai-stale').hidden = true;
-  $('#facts-wrap').hidden = !mode;
+  $('#facts-wrap').hidden = !mode || !DEBUG;
   renderAiControls();
 }
 function resetSuggest() {
@@ -366,7 +379,8 @@ function cancelAi() {
 }
 
 async function aiGenerate() {
-  if (qaState.busy) return; // uma requisição por vez no motor
+  if (qaState.busy || aiState.busy) return; // uma requisição por vez no motor
+  if (await aiSupport() || !(await aiConfirmDownload())) return;
   // Geração atual: um "Cancelar" incrementa aiState.gen e a geração antiga, quando terminar, não mexe em nada.
   const gen = ++aiState.gen;
   const stale = () => gen !== aiState.gen;
@@ -417,7 +431,7 @@ async function aiGenerate() {
     renderAiOut(text, true, moments, { animate: true });
     reveal('#ai-out');
     const secs = ((performance.now() - t0) / 1000).toFixed(0);
-    const warn = issues.length ? ` ⚠️ Atenção: ${issues.join('; ')}. Confira na resposta rápida abaixo.` : ' Modelo pequeno: confira na resposta rápida abaixo.';
+    const warn = issues.length ? ` ⚠️ Atenção: ${issues.join('; ')}. Confira nas dicas rápidas abaixo.` : ' Modelo pequeno: confira nas dicas rápidas abaixo.';
     setStatus('ai-status', `Gerado no seu aparelho em ${secs} s.${warn}`, issues.length ? 'error' : null);
     flowSuggestionShown();
     qaWarmup(); // prepara o formato das respostas das perguntas em segundo plano
@@ -427,7 +441,7 @@ async function aiGenerate() {
     const msg = /device.*lost|out of memory|OOM|allocate/i.test(String(e?.message || e))
       ? 'o aparelho ficou sem memória de vídeo para o modelo. Feche outras abas e tente de novo.'
       : `não consegui rodar o modelo (${String(e?.message || e).slice(0, 120)}).`;
-    setStatus('ai-status', `IA indisponível: ${msg} A resposta rápida continua disponível.`, true);
+    setStatus('ai-status', `IA indisponível: ${msg} As dicas rápidas continuam disponíveis.`, true);
   } finally {
     if (stale()) return; // cancelada: a tela já voltou para a escolha
     aiState.busy = false;
@@ -444,6 +458,7 @@ function aiOnFacts(f) {
 
 $('#ai-go').addEventListener('click', aiGenerate);
 $('#quick-go').addEventListener('click', () => {
+  $('#ai-confirm').hidden = true;
   setSuggestMode('quick');
   collapseStep('suggest');
   reveal('#quick');

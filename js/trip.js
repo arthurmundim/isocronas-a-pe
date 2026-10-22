@@ -321,5 +321,5 @@ function renderTrip() {
   if (!$("#ai-size").children.length) renderAiControls();
   aiOnFacts(f);
   if (typeof mapFocus !== 'undefined' && mapFocus.on && mapFocus.available) setFocus(true, { fit: false }); // horário mudou: pontos citados também
-  refreshSummaries();
+  onStateChanged(); // horário vai para o link
 }

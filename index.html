@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Isócronas a pé</title>
-<meta name="description" content="Explore a pé: área alcançável caminhando, pontos para fotografar e luz do dia.">
+<title>Caminhada fotográfica</title>
+<meta name="description" content="Até onde dá pra ir caminhando, o que fotografar no caminho e como estará a luz.">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
-<link rel="stylesheet" href="css/app.css?v=0.7.0">
+<link rel="stylesheet" href="css/app.css?v=0.8.0">
 <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
@@ -14,9 +14,13 @@
 <body>
 <aside id="panel">
   <button id="sheet-handle" aria-label="Expandir/recolher painel"></button>
+  <!-- Completo só na busca; depois de escolher o ponto vira uma linha fina (#panel.started). -->
   <header>
-    <h1>Isócronas a pé</h1>
-    <p>Até onde dá pra ir caminhando — e o que fotografar no caminho.</p>
+    <div class="brand">
+      <h1>Caminhada fotográfica</h1>
+      <button class="btn btn-sm" id="share" type="button" title="Copiar o link desta exploração (ponto, destino e horário)" disabled>🔗 Copiar link</button>
+    </div>
+    <p class="intro">Até onde dá pra ir caminhando — e o que fotografar no caminho.</p>
   </header>
 
   <!-- Cada .step vira uma linha de resumo clicável quando concluída (.collapsed); ver flow.js. -->
@@ -32,8 +36,8 @@
       </div>
       <ul id="suggestions" role="listbox" aria-label="Resultados da busca"></ul>
       <p class="status" id="search-status"></p>
-      <p class="hint">Ou clique no mapa / arraste o pin. Clique direito sempre move o pin.</p>
-      <div class="row"><button class="btn" id="share" type="button">🔗 Copiar link desta exploração</button></div>
+      <p class="hint only-desktop">Ou clique no mapa. Depois, para mudar o ponto de partida, arraste o marcador vermelho ou use o clique direito.</p>
+      <p class="hint only-touch">Ou toque no mapa, ou use ◎ (no canto do mapa) para partir de onde você está.</p>
     </div>
   </section>
 
@@ -55,6 +59,7 @@
   <!-- Depois do "Continuar" da Caminhada: aviso enquanto os pontos carregam no mapa. -->
   <section id="sec-dest" hidden>
     <p class="status loading" id="dest-wait">Carregando os pontos para fotografar no mapa…</p>
+    <p class="hint">Enquanto isso, você já pode tocar numa rua colorida para escolher o destino.</p>
   </section>
 
   <section id="sec-poi" class="step" data-step="pois" hidden>
@@ -94,23 +99,16 @@
             <input type="time" id="trip-time" aria-label="Horário">
           </div>
           <div class="chips" id="trip-quick" aria-label="Atalhos de horário"></div>
+          <p class="trip-result" id="trip-result"></p>
           <h2 class="tips-title">Luz para foto</h2>
           <table class="sun" id="sun-table"></table>
           <p class="hint" id="sun-tz"></p>
           <div class="field-label">Nuvens nas golden hours</div>
           <table class="sun" id="cloud-table"></table>
           <p class="status" id="cloud-status"></p>
-          <button class="btn btn-primary step-next" data-next="when" type="button">Continuar</button>
-        </div>
-      </div>
-
-      <div class="step" data-step="styles" hidden>
-        <button class="step-summary" type="button"><span class="txt"></span><span class="edit">editar</span></button>
-        <div class="step-body">
-          <p class="trip-result" id="trip-result"></p>
           <div class="field-label">Que tipo de foto você mais gosta de fazer?</div>
           <div class="chips" id="styles" aria-label="Estilos de fotografia"></div>
-          <button class="btn btn-primary step-next" data-next="styles" type="button">Continuar</button>
+          <button class="btn btn-primary step-next" data-next="when" type="button">Continuar</button>
         </div>
       </div>
 
@@ -122,10 +120,14 @@
             <div class="field-label">Tamanho da resposta</div>
             <div class="seg seg-3" id="ai-size" role="radiogroup" aria-label="Tamanho da resposta"></div>
             <div class="choice">
-              <button class="btn btn-choice" id="quick-go" type="button">⚡ Resposta rápida<small>na hora, por regras</small></button>
-              <button class="btn btn-choice btn-primary" id="ai-go" type="button">✨ Gerar com IA<small>no seu aparelho</small></button>
+              <button class="btn btn-choice" id="quick-go" type="button">⚡ Dicas rápidas<small>lista na hora</small></button>
+              <button class="btn btn-choice btn-primary" id="ai-go" type="button">✨ Roteiro com IA<small>texto por horário, ~1 min</small></button>
             </div>
             <p class="hint" id="ai-unsupported" hidden></p>
+            <div class="ai-confirm" id="ai-confirm" hidden>
+              <p>O roteiro com IA roda no seu aparelho. Na primeira vez ele baixa o modelo: <b>~0,9 GB</b>, que fica guardado no navegador para as próximas. Prefira Wi-Fi.</p>
+              <div class="row"><button class="btn btn-primary" id="ai-confirm-yes" type="button">Baixar e gerar</button><button class="btn" id="ai-confirm-no" type="button">Agora não</button></div>
+            </div>
           </div>
         </div>
         <div id="ai-progress" hidden><div class="bar"><div id="ai-progress-bar"></div></div><small id="ai-progress-text"></small></div>
@@ -134,7 +136,7 @@
         <p class="status" id="ai-status"></p>
         <!-- Resposta rápida: aberta e sem cabeçalho quando escolhida; recolhida abaixo do texto quando a escolha é IA. -->
         <details id="quick" hidden>
-          <summary>Ver resposta rápida (regras)</summary>
+          <summary>Ver dicas rápidas (por regras)</summary>
           <ul id="tips"></ul>
         </details>
         <details id="facts-wrap" hidden>
@@ -147,24 +149,38 @@
   </section>
 
 </aside>
-<div id="map"></div>
+<div id="map"><div id="map-loading" class="status loading">Carregando o mapa…</div></div>
+
+<dialog id="glossary" aria-labelledby="glossary-title">
+  <div class="dlg-head"><h2 id="glossary-title">📖 Glossário</h2><button class="btn btn-sm" type="button" data-close>Fechar</button></div>
+  <dl id="glossary-list"></dl>
+</dialog>
+<!-- Tour guiado (só quando a pessoa pede): destaque + cartão com o texto do passo. -->
+<div id="tour" hidden>
+  <div id="tour-hole"></div>
+  <div id="tour-card" role="dialog" aria-live="polite">
+    <p id="tour-text"></p>
+    <div class="row"><small id="tour-count"></small><button class="btn btn-sm" id="tour-prev" type="button">Voltar</button><button class="btn btn-sm btn-primary" id="tour-next" type="button">Próximo</button><button class="btn btn-sm" id="tour-close" type="button">Fechar</button></div>
+  </div>
+</div>
 <div id="toasts" aria-live="polite"></div>
 <div id="busy" role="progressbar" aria-label="Carregando"></div>
 
-<script src="js/config.js?v=0.7.0"></script>
-<script src="js/util.js?v=0.7.0"></script>
-<script src="js/url.js?v=0.7.0"></script>
-<script src="js/map.js?v=0.7.0"></script>
-<script src="js/search.js?v=0.7.0"></script>
-<script src="js/iso.js?v=0.7.0"></script>
-<script src="js/route.js?v=0.7.0"></script>
-<script src="js/pois.js?v=0.7.0"></script>
-<script src="js/light.js?v=0.7.0"></script>
-<script src="js/trip.js?v=0.7.0"></script>
-<script src="js/tips.js?v=0.7.0"></script>
-<script src="js/ai.js?v=0.7.0"></script>
-<script src="js/qa.js?v=0.7.0"></script>
-<script src="js/flow.js?v=0.7.0"></script>
-<script src="js/main.js?v=0.7.0"></script>
+<script src="js/config.js?v=0.8.0"></script>
+<script src="js/util.js?v=0.8.0"></script>
+<script src="js/url.js?v=0.8.0"></script>
+<script src="js/map.js?v=0.8.0"></script>
+<script src="js/search.js?v=0.8.0"></script>
+<script src="js/iso.js?v=0.8.0"></script>
+<script src="js/route.js?v=0.8.0"></script>
+<script src="js/pois.js?v=0.8.0"></script>
+<script src="js/light.js?v=0.8.0"></script>
+<script src="js/trip.js?v=0.8.0"></script>
+<script src="js/tips.js?v=0.8.0"></script>
+<script src="js/ai.js?v=0.8.0"></script>
+<script src="js/qa.js?v=0.8.0"></script>
+<script src="js/flow.js?v=0.8.0"></script>
+<script src="js/help.js?v=0.8.0"></script>
+<script src="js/main.js?v=0.8.0"></script>
 </body>
 </html>
