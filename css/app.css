@@ -266,3 +266,4 @@ div.step + div.step, #trip > .step + #suggest { margin-top: 8px; }
 #tour-card p { margin: 0 0 8px; line-height: 1.5; }
 #tour-card .row { margin: 0; }
 #tour-count { flex: 1; color: var(--muted); }
+.ai-src { margin-left: 4px; padding: 0 6px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); color: var(--muted); font-size: 11px; white-space: nowrap; }

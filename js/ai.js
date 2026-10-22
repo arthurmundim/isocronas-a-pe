@@ -59,7 +59,7 @@ const CAT_STYLES = { viewpoint: ['paisagem'], artwork: ['arte', 'street'], histo
   park: ['natureza', 'retrato'], fountain: ['noturna', 'minimal'], cafe: ['street'] };
 const CAT_IDEA = {
   viewpoint: ['vista aberta da cidade', 'arquitetura'], artwork: ['uma obra de arte urbana no caminho', 'arquitetura'],
-  historic: ['construção histórica: detalhes e textura da fachada', 'arquitetura'], worship: ['fachada e torres da igreja', 'arquitetura'],
+  historic: ['detalhes e textura da fachada histórica', 'arquitetura'], worship: ['fachada e torres da igreja', 'arquitetura'],
   park: ['verde e sombra aberta', 'retrato sombra'], fountain: ['água e reflexos', 'agua'], cafe: ['gente nas mesas e vitrines', 'street'],
 };
 // "chega na golden hour" / "chega à noite" / "chega com sol baixo".
@@ -85,7 +85,7 @@ function aiMoments(f, n) {
   const next = f.luz.proximo_evento;
   const sky = !f.nuvens ? '' : blocked ? `; céu ${f.nuvens.total_pct}% encoberto, luz difusa`
     : f.nuvens.altas_pct >= 40 && f.nuvens.baixas_pct < 40 ? '; nuvens altas que podem pegar cor' : '';
-  add({ hora: C.hora, onde: f.destino.nome, prio: 1000, fim: true, phase: C.fase, cat: f._destCat, scene: CAT_IDEA[f._destCat]?.[1],
+  add({ hora: C.hora, onde: f.destino.nome, prio: 1000, fim: true, phase: C.fase, cat: f._destCat, scene: f._destScene,
     ver: `você chega ${phaseAt(C.fase)}${next ? `; ${next.evento} ${next.minutos_apos_chegada} min depois (${next.hora})` : ''}${sky}`,
     camera: cameraForPhase(C.fase, blocked) });
 
@@ -110,7 +110,7 @@ function aiMoments(f, n) {
     }
   }
   for (const p of f._pontos) {
-    const [idea, cam] = CAT_IDEA[p.cat] || ['um ponto interessante', 'street'];
+    const idea = p.ideia, cam = p.scene; // pelo tipo real do lugar (poiKind): estátua ≠ fachada
     const ph = phaseAtTime(p.hora_aprox);
     // Cena de retrato só para quem marcou retrato; sem isso, o parque segue a luz do momento.
     const scene = cam === 'retrato sombra' && !styles.has('retrato') ? null : cam;
@@ -159,6 +159,9 @@ const AI_SYSTEM = [
   'Escreva exatamente uma linha por momento, na mesma ordem e quantidade.',
   'Não escreva horários nem configurações de câmera (ISO, abertura, velocidade, EV): o app mostra isso à parte.',
   'Não acrescente lugares, pessoas, objetos ou cores que não estejam no momento; não use títulos nem markdown.',
+  'Não copie a descrição do momento: diga com suas palavras o que fazer ali.',
+  // Testado: sem isso o modelo devolvia o esboço quase igual ("Café X: gente nas mesas e vitrines.") em ~60% das linhas.
+  'Comece cada linha, logo depois do número, com um verbo de ação no imperativo: Olhe, Fotografe, Procure, Espere, Aproveite, Enquadre, Comece ou Priorize.',
 ].join(' ');
 // Exemplo (few-shot) com lugares de outra cidade, para o modelo não copiar nomes reais da rota.
 const AI_EXAMPLE_IN = [
@@ -167,9 +170,9 @@ const AI_EXAMPLE_IN = [
   '3) Paço Imperial — o que observar: você chega na golden hour; fim da golden hour da manhã 12 min depois',
 ].join('\n');
 const AI_EXAMPLE_OUT = [
-  '1) Logo na saída, na Praça XV, a luz ainda está baixa e dourada: comece pelas cenas abertas da praça antes que ela suba.',
-  '2) Na Rua do Ouvidor, olhe para as fachadas do lado esquerdo pegando luz de lado; é a hora de mostrar textura de reboco e janelas.',
-  '3) No Paço Imperial você ainda pega a golden hour, mas ela acaba em poucos minutos: priorize a fachada principal enquanto a luz está quente.',
+  '1) Comece pelas cenas abertas da Praça XV, enquanto a luz ainda está baixa e dourada, antes que ela suba.',
+  '2) Olhe para as fachadas do lado esquerdo da Rua do Ouvidor pegando luz de lado: é a hora de mostrar textura de reboco e janelas.',
+  '3) Priorize a fachada principal do Paço Imperial enquanto a luz está quente: a golden hour acaba em poucos minutos.',
 ].join('\n');
 // Janela pertinente: da saída até 2 h depois da chegada. Só o que cai nela entra no contexto e pode ser citado.
 function aiWindow(f) {
@@ -227,29 +230,82 @@ function cameraNumbers(text) {
   }
   return out;
 }
-function aiCheck(text, f, moments) {
-  const known = `${momentsText(moments)}\n${aiContext(f)}`;
-  const issues = [];
-  const times = [...new Set(text.match(/\b\d{1,2}:\d{2}\b/g) || [])].filter((h) => !known.includes(h.padStart(5, '0')));
-  if (times.length) issues.push(`horário fora dos dados (${times.join(', ')})`);
+// ---- Checagem por momento ----
+// Cada linha do modelo é checada contra o próprio momento. Depois da nova tentativa, os momentos que continuam com
+// problema mostram o texto do app (marcado como tal), e não uma frase errada como se fosse da IA.
+const normTxt = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+// O modelo costuma repetir o lugar no começo ("Avenida X: …"), que já está no cabeçalho do bloco.
+const placePrefixRe = (m) => new RegExp(`^${m.onde.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:,—–-]\\s*`, 'i');
+// Lugar com nome próprio ("Rio São Francisco", "Rua dos Desejos") e elementos da paisagem que não estão nos dados.
+const AI_PLACE = /\b(?:Rua|Avenida|Av\.|Praça|Largo|Rio|Ponte|Parque|Igreja|Museu|Travessa|Alameda|Estação|Mercado|Teatro|Lagoa|Praia|Morro)\s+(?:(?:d[aeo]s?|e)\s+)?[A-ZÀ-Ú][\wÀ-ú]+(?:\s+[A-ZÀ-Ú][\wÀ-ú]+)*/g;
+// Paisagem, materiais e cores (testado: "rio", "peça de plástico"): só valem se estiverem nos dados.
+const AI_ELEMENTS = /\b(rio|rios|mar|praia|lago|lagoa|ponte|morro|montanha|cachoeira|chuva|neve|lua|estrelas?|pl[áa]stico|bronze|m[áa]rmore|madeira|metal|pedra|vidro|ferro|granito|concreto|vermelh[oa]s?|amarel[oa]s?|verdes?|roxo|rosa|laranja|prateado)\b/gi;
+// Palavras comuns a vários momentos (luz, fase, direção): não indicam mistura de um momento com outro.
+const AI_SHARED = new Set(['golden', 'fachadas', 'fachada', 'esquerdo', 'direito', 'quente', 'vindo', 'vinda', 'batendo', 'depois', 'antes', 'saida',
+  'chega', 'chegada', 'minutos', 'baixo', 'noite', 'historica', 'detalhes', 'textura', 'contra', 'fundo', 'limpo', 'escrito', 'observar', 'momento']);
+function aiLineIssues(line, m, f, known, others = []) {
+  if (!line) return ['faltou o texto'];
+  const out = [];
+  const kn = known.toLowerCase();
+  // Cópia do esboço: o app já tem essa descrição; a IA precisa escrever com as próprias palavras.
+  const body = normTxt(line.replace(placePrefixRe(m), '')), ver = normTxt(m.ver);
+  const words = new Set(body.split(' ')), key = ver.split(' ').filter((w) => w.length > 3);
+  const overlap = key.filter((w) => words.has(w)).length / Math.max(1, key.length);
+  // Cópia parcial: o parêntese do esboço ("a peça (placa)") só aparece quando o modelo copia.
+  if (body.includes(ver) || (overlap >= 0.85 && words.size <= key.length + 5) || /\([a-zà-ú ]+\)/.test(line)) out.push('copiou a descrição do app em vez de escrever');
+  // Mistura: palavra própria de outro momento (testado: "vitrines e mesas" do café no bloco da praça).
+  const mine = new Set(`${ver} ${normTxt(m.onde)}`.split(' '));
+  const foreign = [...new Set(others.flatMap((v) => normTxt(v).split(' ')))].filter((w) => w.length >= 5 && !mine.has(w) && !AI_SHARED.has(w) && words.has(w));
+  if (foreign.length) out.push(`misturou com outro momento (${foreign.join(', ')})`);
+  // Detalhes do exemplo do prompt (testado: "textura de reboco e janelas" num café).
+  const leak = (line.match(/reboco|janelas|cenas abertas|fachada principal|antes que ela suba/gi) || []).filter((x) => !`${m.ver} ${m.onde}`.toLowerCase().includes(x.toLowerCase()));
+  if (leak.length) out.push(`trouxe detalhes do exemplo (${[...new Set(leak)].join(', ')})`);
+  const times = [...new Set(line.match(/\b\d{1,2}:\d{2}\b/g) || [])].filter((h) => !known.includes(h.padStart(5, '0')));
+  if (times.length) out.push(`horário fora dos dados (${times.join(', ')})`);
   // Configuração de câmera é sempre montada pelo app; no texto do modelo ela não deve aparecer.
-  const cams = [...cameraNumbers(text)];
-  if (cams.length) issues.push(`escreveu configuração de câmera no texto (${cams.map((c) => c.replace(/^(iso|f|s|ev)/, (k) => ({ iso: 'ISO ', f: 'f/', s: '1/', ev: 'EV ' }[k]))).join(', ')})`);
-  const missing = moments.map((_, i) => i + 1).filter((n) => !parseAiLines(text)[n]);
-  if (missing.length) issues.push(`faltou o texto do momento ${missing.join(', ')}`);
-  const gear = (text.match(/\b(flash|trip[ée]|lentes?|teleobjetiva|grande[- ]angular|filtros?|rebatedor|polarizador)\b/gi) || []).filter((g) => !new RegExp(g, 'i').test(known));
-  if (gear.length) issues.push(`equipamento não sugerido (${[...new Set(gear.map((g) => g.toLowerCase()))].join(', ')})`);
-  if (f.nuvens?.total_pct >= 85 && /contraluz|sombras? longas?|sol direto|céu colorido/i.test(text)) issues.push('fala de sol direto com o céu encoberto');
+  const cams = [...cameraNumbers(line)];
+  if (cams.length) out.push(`escreveu configuração de câmera (${cams.map((c) => c.replace(/^(iso|f|s|ev)/, (k) => ({ iso: 'ISO ', f: 'f/', s: '1/', ev: 'EV ' }[k]))).join(', ')})`);
+  const gear = (line.match(/\b(flash|trip[ée]|lentes?|teleobjetiva|grande[- ]angular|filtros?|rebatedor|polarizador)\b/gi) || []).filter((g) => !kn.includes(g.toLowerCase()));
+  if (gear.length) out.push(`equipamento não sugerido (${[...new Set(gear.map((g) => g.toLowerCase()))].join(', ')})`);
+  const places = (line.match(AI_PLACE) || []).filter((p) => !kn.includes(p.toLowerCase()));
+  if (places.length) out.push(`lugar que não está nos dados (${[...new Set(places)].join(', ')})`);
+  const els = (line.match(AI_ELEMENTS) || []).filter((e) => !new RegExp(`\\b${e}\\b`, 'i').test(known));
+  if (els.length) out.push(`elemento que não está nos dados (${[...new Set(els.map((e) => e.toLowerCase()))].join(', ')})`);
+  // Luz coerente com a fase do momento (o modelo trocava golden e blue hour).
+  const own = m.ver.toLowerCase();
+  if (isLowLight(m.phase) && /dourad|golden|sol (baixo|forte|direto)|luz do sol/i.test(line) && !/dourad|golden|sol/.test(own)) out.push(`fala de sol/luz dourada na ${m.phase}`);
+  if (!isLowLight(m.phase) && /c[ée]u (ainda )?azul|luzes (da rua |da cidade )?(est[ãa]o )?acesas|postes acesos|letreiros acesos|blue hour/i.test(line) && !/blue hour|acesa/.test(own))
+    out.push(`fala de luz de noite com ${m.phase}`);
+  const cl = f.nuvens?.total_pct;
+  if (cl >= 85 && /c[ée]u (claro|limpo|aberto)|poucas? nuve|sem nuvens|luz (que chega )?diret|chega diret|contraluz|sombras? longas?|sol direto|c[ée]u colorido/i.test(line))
+    out.push(`céu contraditório (${cl}% encoberto)`);
+  if (cl != null && cl < 30 && /c[ée]u (encoberto|fechado|nublado)|luz difusa/i.test(line)) out.push(`céu contraditório (só ${cl}% de nuvens)`);
   const w = aiWindow(f);
   for (const [k, re, n] of [['nascer', /nascer do sol/i, 'nascer do sol'], ['por_do_sol', /p[ôo]r do sol/i, 'pôr do sol'], ['blue_hour', /blue hour/i, 'blue hour']])
-    if (re.test(text) && !w.has(k) && !re.test(momentsText(moments))) issues.push(`cita ${n}, que não acontece nesse período`);
+    if (re.test(line) && !w.has(k) && !re.test(known)) out.push(`cita ${n}, que não acontece nesse período`);
   // Sem \b depois de palavra acentuada ("café"): em regex JS sem a flag u, "é" não conta como letra.
   // Substantivo em minúscula = genérico ("a estação"); com maiúscula é nome ("Estação da Luz").
-  const vague = (text.match(/(?:^|[^\wÀ-ú])(?:[oO]|ao|no|do|pelo|[aA]|à|na|da|pela) (?:café|prédio|bar|restaurante|museu|monumento|praça|igreja|loja|estação)(?![\wÀ-ú])(?! sem nome)/g) || [])
+  const vague = (line.match(/(?:^|[^\wÀ-ú])(?:[oO]|ao|no|do|pelo|[aA]|à|na|da|pela) (?:café|prédio|bar|restaurante|museu|monumento|praça|igreja|loja|estação)(?![\wÀ-ú])(?! sem nome)/g) || [])
     .map((v) => v.replace(/^[^\wÀ-ú]/, ''))
-    .filter((v) => !known.toLowerCase().includes(v.toLowerCase()));
-  if (vague.length) issues.push(`lugar vago (${[...new Set(vague)].join(', ')})`);
-  return issues;
+    // Lugar descrito pela rua nos dados ("café, na altura da Rua X") pode ser chamado de "o café".
+    .filter((v) => !kn.includes(v.toLowerCase()) && !kn.includes(`${v.split(' ').pop().toLowerCase()},`));
+  if (vague.length) out.push(`lugar vago (${[...new Set(vague)].join(', ')})`);
+  return out;
+}
+// Índice do momento → problemas.
+function aiLineProblems(text, f, moments) {
+  const known = `${momentsText(moments)}\n${aiContext(f)}`;
+  const lines = parseAiLines(text);
+  const out = new Map();
+  moments.forEach((m, i) => {
+    const others = moments.filter((_, j) => j !== i).map((x) => x.ver);
+    const iss = aiLineIssues(lines[i + 1], m, f, known, others);
+    if (iss.length) out.set(i, iss);
+  });
+  return out;
+}
+function aiCheck(text, f, moments) {
+  return [...aiLineProblems(text, f, moments)].map(([i, iss]) => `momento ${i + 1}: ${iss.join(', ')}`);
 }
 
 // ==== UI ====
@@ -262,7 +318,8 @@ function aiProgress(p, text = '') {
   // O texto do WebLLM é técnico ("Fetching param cache[3/27]: 412MB fetched..."); mostramos só o essencial.
   const mb = /([\d.]+)\s*MB fetched/.exec(text)?.[1];
   $('#ai-progress-text').textContent = mb ? `Baixando o modelo: ${Math.round(mb)} de ~${AI.downloadMB} MB (só na primeira vez)`
-    : p >= 1 || /Finish|GPU|shader/i.test(text) ? 'Preparando o modelo na GPU…' : (text || 'Carregando…').slice(0, 80);
+    : /from cache|loaded/i.test(text) ? `Carregando o modelo já baixado: ${Math.round(p * 100)}%`
+    : p >= 1 || /Finish|GPU|shader/i.test(text) ? 'Preparando o modelo na GPU…' : 'Carregando…';
 }
 // "1) texto…" → { 1: 'texto…' }. Linhas sem número continuam a anterior.
 function parseAiLines(text) {
@@ -276,18 +333,17 @@ function parseAiLines(text) {
   return out;
 }
 // Estrutura fixa por momento: hora · lugar, a frase da IA, a configuração no formato padrão e o motivo técnico.
-// Se a IA não escreveu um momento, entra a descrição determinística dele.
+// Se a IA não escreveu um momento, ou se o texto dela não passou na checagem (appLines), entra a descrição
+// determinística, marcada como "texto do app".
 // animate: cada momento entra em sequência (fade), uma única vez, depois que o texto inteiro está pronto.
-function renderAiOut(text, done, moments, { animate = false } = {}) {
+function renderAiOut(text, done, moments, { animate = false, appLines = new Set() } = {}) {
   const lines = parseAiLines(text);
   const last = Math.max(0, ...Object.keys(lines).map(Number));
   const shown = done ? moments : moments.slice(0, Math.max(1, last));
   $('#ai-out').innerHTML = shown.map((m, i) => {
-    // O modelo costuma repetir o lugar no começo ("Avenida X: …"), que já está no cabeçalho.
-    const placePrefix = new RegExp(`^${m.onde.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:,—–-]\\s*`, 'i');
-    const said = lines[i + 1]?.replace(placePrefix, '').replace(/^./, (c) => c.toUpperCase());
+    const said = appLines.has(i) ? null : lines[i + 1]?.replace(placePrefixRe(m), '').replace(/^./, (c) => c.toUpperCase());
     const typing = !done && i + 1 === Math.max(1, last);
-    const body = said ? esc(said) : done ? `${esc(m.ver[0].toUpperCase() + m.ver.slice(1))}.` : '';
+    const body = said ? esc(said) : done ? `${esc(m.ver[0].toUpperCase() + m.ver.slice(1))}. <small class="ai-src" title="A IA errou neste momento; este é o texto calculado pelo app">texto do app</small>` : '';
     return `<div class="ai-moment${animate ? ' ai-in' : ''}" style="animation-delay:${(i * 0.4).toFixed(1)}s"><div class="ai-when">${esc(m.hora)} · ${esc(m.onde)}</div>
       <p>${body}${typing ? '<span class="ai-caret"></span>' : ''}</p>
       ${!typing || done ? `<p class="ai-cam">📷 ${esc(camText(m.camera))}</p><p class="ai-why"><b>Por quê:</b> ${esc(m.camera.why)}</p>` : ''}${done ? qaBlockHtml(i) : ''}</div>`;
@@ -419,20 +475,25 @@ async function aiGenerate() {
       return text;
     });
     let text = await write(aiMessages(f, moments), 0.3, 'Escrevendo');
-    let issues = aiCheck(text, f, moments);
-    // Uma nova tentativa, mais conservadora, apontando o que saiu errado.
-    if (issues.length && !stale()) {
-      const fix = `Atenção: na versão anterior você errou (${issues.join('; ')}). Corrija seguindo as regras.`;
-      text = await write(aiMessages(f, moments, fix), 0.1, 'Revisando');
-      issues = aiCheck(text, f, moments);
+    let bad = aiLineProblems(text, f, moments);
+    // Uma nova tentativa, mais conservadora, apontando o que saiu errado em cada momento.
+    if (bad.size && !stale()) {
+      const fix = `Atenção: na versão anterior você errou (${aiCheck(text, f, moments).join('; ')}). Escreva com suas palavras, usando só o que está em cada momento.`;
+      const retry = await write(aiMessages(f, moments, fix), 0.5, 'Revisando'); // temperatura baixa favorecia copiar o esboço
+      // Fica, por momento, a linha que passou na checagem (da nova tentativa ou da primeira).
+      const bad2 = aiLineProblems(retry, f, moments);
+      const l1 = parseAiLines(text), l2 = parseAiLines(retry);
+      text = moments.map((_, i) => `${i + 1}) ${(!bad2.has(i) ? l2 : !bad.has(i) ? l1 : l2)[i + 1] || ''}`).join('\n');
+      bad = new Map([...bad2].filter(([i]) => bad.has(i)));
     }
     if (stale()) return;
     opEnd('ai');
-    renderAiOut(text, true, moments, { animate: true });
+    renderAiOut(text, true, moments, { animate: true, appLines: new Set(bad.keys()) });
     reveal('#ai-out');
     const secs = ((performance.now() - t0) / 1000).toFixed(0);
-    const warn = issues.length ? ` ⚠️ Atenção: ${issues.join('; ')}. Confira nas dicas rápidas abaixo.` : ' Modelo pequeno: confira nas dicas rápidas abaixo.';
-    setStatus('ai-status', `Gerado no seu aparelho em ${secs} s.${warn}`, issues.length ? 'error' : null);
+    const why = [...new Set([...bad.values()].flat().map((s) => s.replace(/ \(.*\)$/, '')))].join('; ');
+    const warn = bad.size ? ` ${bad.size} de ${moments.length} momentos ficaram com o texto do app (a IA errou: ${why}).` : ' Modelo pequeno: confira nas dicas rápidas abaixo.';
+    setStatus('ai-status', `Gerado no seu aparelho em ${secs} s.${warn}`);
     flowSuggestionShown();
     qaWarmup(); // prepara o formato das respostas das perguntas em segundo plano
   } catch (e) {
