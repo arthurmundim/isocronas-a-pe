@@ -51,7 +51,7 @@ async function nominatimExact(q) {
   const num = houseNumberOf(q);
   const [hit] = await nominatimSearch({ q, addressdetails: 1, viewbox: bboxAround(40) });
   const a = hit?.address || {};
-  if (!hit || !num || !a.house_number || !new RegExp(`(^|\D)${num}(\D|$)`).test(a.house_number)) return null;
+  if (!hit || !num || !a.house_number || !new RegExp(`(^|\\D)${num}(\\D|$)`).test(a.house_number)) return null;
   const road = a.road || a.pedestrian || hit.name;
   const place = [a.suburb || a.neighbourhood, a.city || a.town || a.village].filter(Boolean).join(' · ');
   return { lat: +hit.lat, lng: +hit.lon, title: `${road}, ${num}`, sub: place, exact: true };
@@ -99,6 +99,12 @@ async function runSearch() {
   suggestions = []; activeIdx = -1; renderSuggestions();
   $('#search-wrap').classList.add('loading');
   setStatus('search-status', isCep(q) ? 'Buscando CEP…' : 'Buscando…', 'loading');
+  opStart('search', '#search-status', () => {
+    searchSeq++;
+    abortApis(['Photon', 'Nominatim', 'BrasilAPI']);
+    $('#search-wrap').classList.remove('loading');
+    setStatus('search-status', 'Busca cancelada. Ajuste o texto e busque de novo.');
+  });
   try {
     let opts;
     if (isCep(q)) {
@@ -111,7 +117,8 @@ async function runSearch() {
       if (exact && !photon.some((p) => p.exact)) opts = [exact, ...photon];
       // Número não mapeado em nenhuma fonte: oferece a rua sem número (o Photon prioriza a região do mapa).
       if (num && !opts.some((p) => p.exact)) {
-        const street = await photonSearch(q.replace(new RegExp(`(?:n[º°o.]?\s*)?\b${num}\b`, 'i'), ' ')).catch(() => []);
+        // Barras dobradas: dentro de template string, "\b" viraria backspace e a regex nunca casava.
+        const street = await photonSearch(q.replace(new RegExp(`(?:n[º°o.]?\\s*)?\\b${num}\\b`, 'i'), ' ')).catch(() => []);
         const extra = street.slice(0, 3).map((s) => ({ ...s, sub: `${s.sub} · nº ${num} não mapeado; depois arraste o pin para ajustar` }));
         opts = [...extra, ...opts.filter((o) => !extra.some((e) => Math.abs(e.lat - o.lat) < 1e-4 && Math.abs(e.lng - o.lng) < 1e-4))];
       }
@@ -124,7 +131,7 @@ async function runSearch() {
   } catch (e) {
     if (seq === searchSeq) setStatus('search-status', e.message, true);
   } finally {
-    if (seq === searchSeq) $('#search-wrap').classList.remove('loading');
+    if (seq === searchSeq) { $('#search-wrap').classList.remove('loading'); opEnd('search'); }
   }
 }
 
