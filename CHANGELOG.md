@@ -2,6 +2,32 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.8.0] - 2026-10-22
+
+Mudanças da auditoria de funcionamento, UX e uso por leigos.
+
+### Adicionado
+- **Glossário** (📖 no mapa) com os termos técnicos explicados sem jargão: mancha, golden/blue hour, contraluz, ISO, Aperture, Shutter Speed, EV etc.
+- **Tour guiado** opcional (🧭 no mapa), passo a passo, destacando cada parte da tela.
+- O link guarda também **destino, dia e horário** (`to=lat,lng` e `sair=`/`chegar=`); quem abre já vê a rota e o "Quando?".
+- Confirmação antes do primeiro download do modelo de IA (~0,9 GB, com sugestão de Wi-Fi).
+- Aviso "Carregando o mapa…" enquanto o mapa desenha.
+
+### Alterado
+- Nome: **Caminhada fotográfica** (antes "Isócronas a pé").
+- Cabeçalho completo só na busca; depois vira uma linha fina com **"Copiar link" sempre visível** (desativado até haver um ponto).
+- "Quando?" e estilos de foto numa etapa só (um "Continuar" a menos).
+- Tema, foco, glossário e tour numa coluna única de botões no mapa.
+- ◎ (localização) define o ponto de partida onde você está.
+- Com rota aberta, um toque fora da mancha pede confirmação antes de trocar o ponto de partida.
+- Enquanto os pontos para fotografar carregam, já dá para escolher o destino tocando numa rua da mancha.
+- Celular: o painel desce (36% da tela) quando a mancha, a rota ou o foco aparecem, e o mapa reenquadra; um toque no painel o traz de volta. Ponto vindo do link aparece acima do painel.
+- Sugestões: "⚡ Dicas rápidas — lista na hora" e "✨ Roteiro com IA — texto por horário, ~1 min"; o tamanho mostra quantas dicas e momentos entram.
+- Mancha com paleta amigável a daltônicos (ciano → roxo → magenta, sem verde x vermelho); rota em azul-escuro.
+- Mensagens de carregamento e erro falam do serviço ("Cálculo de caminhos", "Pontos do mapa"…) em vez do nome dos servidores.
+- Dica de clique direito só aparece com mouse; no toque, a dica cita o ◎.
+- "Dados usados nas sugestões" (JSON) só aparece com `?debug` na URL.
+
 ## [0.7.0] - 2026-10-22
 
 ### Adicionado
@@ -150,6 +176,7 @@ Primeira versão funcional.
 - Layout responsivo: painel lateral vira bottom sheet no celular.
 - Cache em memória, filas com intervalo mínimo por API e fallback/backoff entre servidores Overpass.
 
+[0.8.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.6.1...v0.6.3
 [0.6.1]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.6.0...v0.6.1
