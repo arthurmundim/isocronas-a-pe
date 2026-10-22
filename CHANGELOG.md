@@ -2,6 +2,23 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.9.0] - 2026-10-22
+
+Mudanças da auditoria das respostas da IA (6 cenários: São Paulo, Rio, BH, Curitiba, Lisboa e Sé).
+
+### Corrigido
+- **Pontos citados fora do caminho**: só entram pontos cuja posição cai ao longo do trajeto (depois dos primeiros ~80 m e antes dos ~40 m finais). Antes, o começo da rota "alcançava" tudo a 60 m do ponto de partida, inclusive o que ficava atrás ou do outro lado da rua, e esse ponto ainda tomava o lugar da saída (ex.: MASP → Praça Flávio de Carvalho; BH → busto atrás da praça).
+- **Câmera pelo tipo de lugar**: estátua, busto, mural, placa e monumento têm cena própria ("peça"), com configuração e motivo de peça, não de fachada. "Patrimônio" só vira construção quando o OSM indica um prédio.
+- **Pergunta do ISO**: segue o ISO configurado. Com ISO 100 e exposição longa à noite, a pergunta é "Por que o ISO fica baixo mesmo com pouca luz?" (antes sugeria "Por que não dá para usar um ISO mais baixo?").
+- Progresso do carregamento do modelo já baixado em português ("Carregando o modelo já baixado: 68%").
+
+### Alterado
+- **Nomes**: só aparecem nomes que dizem o que o lugar é ("Fonte dos Desejos", "Museu Mineiro", "Café Nicola"). Nomes soltos ("dos Desejos", "Grade", "Bernardo Guimarães") ou descrições longas do OSM viram descrição ampla pela rua ("busto, na altura da Rua Gonçalves Dias").
+- **Texto do roteiro**: o modelo começa cada linha com um verbo de ação. Antes ele devolvia o esboço quase igual em ~60% das linhas (Lisboa); nos testes (Lisboa e BH, 3 gerações cada), passou a reescrever 23 de 24 linhas.
+- **Checagem por momento**, mais dura: cópia do esboço, lugares e elementos que não estão nos dados ("Rio São Francisco", "Rua dos Desejos", "peça de plástico"), luz da fase errada (dourada na blue hour, céu azul e luzes acesas na golden hour), céu contraditório, mistura com outro momento e detalhes do exemplo do prompt. A nova tentativa usa temperatura 0,5 (0,1 favorecia copiar) e fica, por momento, a linha que passou. O que continuar errado mostra o texto do app, marcado como **"texto do app"**, e o status diz quantos momentos e por quê.
+- **Perguntas sugeridas**: cada bloco oferece um trio variado (técnica, luz/composição, lugar ou estilo), que muda entre blocos vizinhos e a cada resposta. Antes eram sempre as mesmas 3.
+- **Checagem de coerência das respostas**: reprova citar as instruções ("veredito fornecido"), "por quê" repetindo a resposta, termos de outra fase da luz, "abertura da fachada" e dica que contradiz a configuração. A resposta calculada pelo app (quando a IA erra duas vezes) ficou completa: veredito ou frase do dado principal, motivo e dica de composição.
+
 ## [0.8.0] - 2026-10-22
 
 Mudanças da auditoria de funcionamento, UX e uso por leigos.
@@ -176,6 +193,7 @@ Primeira versão funcional.
 - Layout responsivo: painel lateral vira bottom sheet no celular.
 - Cache em memória, filas com intervalo mínimo por API e fallback/backoff entre servidores Overpass.
 
+[0.9.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.6.1...v0.6.3
