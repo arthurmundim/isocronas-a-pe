@@ -145,6 +145,36 @@ async function enrichStreetNames(t) {
   if (state.trip === t) renderTrip();
 }
 
+// ==== TIPO E NOME DOS PONTOS ====
+// O que o ponto é de fato (pelas tags do OSM): uma estátua ou placa não é "construção histórica" nem tem "fachada".
+// scene: cena de câmera (CAMERA/CAMERA_LOW); idea: o que observar.
+const BUILDING_HISTORIC = /^(building|church|castle|manor|palace|house|fort|city_gate|tower|monastery|ruins|chapel|cathedral|farm|mansion)$/;
+function poiKind(p) {
+  const t = p.tags || {};
+  if (p.cat === 'artwork') {
+    const tipo = { mural: 'mural', graffiti: 'grafite', statue: 'estátua', bust: 'busto', sculpture: 'escultura', relief: 'relevo', installation: 'instalação' }[t.artwork_type] || 'obra de arte';
+    return { tipo, scene: 'obra', idea: /mural|grafite/.test(tipo) ? `o ${tipo} inteiro de frente e os detalhes de traço e cor` : `a peça (${tipo}) contra um fundo limpo, com a luz batendo nela` };
+  }
+  if (p.cat === 'historic') {
+    if (BUILDING_HISTORIC.test(t.historic) || t.building) return { tipo: 'construção histórica', scene: 'arquitetura', idea: 'detalhes e textura da fachada histórica' };
+    const tipo = { bust: 'busto', statue: 'estátua', plaque: 'placa', stele: 'estela' }[t.memorial] || { monument: 'monumento', wayside_cross: 'cruzeiro', tomb: 'túmulo', memorial: 'memorial' }[t.historic] || 'marco histórico';
+    return { tipo, scene: 'obra', idea: `a peça (${tipo}) e o que está escrito nela, com a luz batendo de lado` };
+  }
+  const [idea, scene] = CAT_IDEA[p.cat] || ['um ponto interessante', 'street'];
+  return { tipo: CAT[p.cat].one, scene, idea };
+}
+// Nome "bem definido": diz o que o lugar é ("Fonte dos Desejos", "Igreja da Sé", "Café Nicola"). Nomes soltos
+// ("dos Desejos", "Grade", "Bernardo Guimarães") viram descrição ampla pela rua ("busto na altura da Rua X").
+const PLACE_WORDS = /\b(pra[çc]a|largo|igreja|catedral|capela|bas[íi]lica|mosteiro|convento|santu[áa]rio|templo|museu|teatro|theatro|pal[áa]cio|pa[çc]o|solar|casa|edif[íi]cio|pr[ée]dio|torre|arco|ponte|viaduto|esta[çc][ãa]o|mercado|biblioteca|arquivo|galeria|centro|instituto|parque|jardim|bosque|horto|mirante|miradouro|belvedere|elevador|fonte|chafariz|monumento|memorial|est[áa]tua|busto|mural|obelisco|cruzeiro|caf[ée]|cafeteria|confeitaria|padaria|bar|pastelaria|escadaria|p[áa]tio|cine|cinema)\b/i;
+function poiClearName(p) {
+  const n = (p.name || '').trim();
+  // Sem maiúscula ("dos Desejos") ou com cara de descrição ("Esta é a fonte virada a Sul…"): não é um nome.
+  if (!n || !/^[A-ZÀ-Ú0-9]/.test(n) || n.length > 60 || /[.;]\s/.test(n)) return null;
+  // Cafés costumam ter nome de marca ("Starbucks"): o tipo já está implícito no contexto da categoria.
+  if (p.cat === 'cafe') return n;
+  return PLACE_WORDS.test(n.normalize('NFC')) ? n : null;
+}
+
 function buildFacts() {
   const t = state.trip, times = tripTimes();
   if (!t || !times) return null;
@@ -179,17 +209,21 @@ function buildFacts() {
   });
 
   // Pontos de interesse a até 60 m da rota, com o horário aproximado em que você passa por eles.
-  // Ignora o destino e o que está colado na origem/destino (o OSM às vezes tem o mesmo lugar duplicado).
-  const ends = [[state.point.lng, state.point.lat], [lng, lat]];
+  // Só o que fica AO LONGO do trajeto: a projeção na rota cai depois dos primeiros ~80 m e antes dos ~40 m finais.
+  // Sem isso entrava o que está atrás ou ao lado do ponto de partida (o começo da linha "alcança" 60 m em volta do
+  // pin) e o que fica depois do destino.
   const pontos = state.pois
-    .filter((p) => !(t.dest && p.id === t.dest.id) && ends.every((e) => turf.distance(e, [p.lng, p.lat], { units: 'meters' }) > 40))
+    .filter((p) => !(t.dest && p.id === t.dest.id))
     .map((p) => {
       const pt = turf.point([p.lng, p.lat]);
       const dist = turf.pointToLineDistance(pt, t.line, { units: 'meters' });
       if (dist > 60) return null;
       const near = turf.nearestPointOnLine(t.line, pt, { units: 'kilometers' }).properties;
       const along = near.location ?? near.lineDistance ?? 0;
-      return { id: p.id, nome: p.name || `${CAT[p.cat].one} sem nome no mapa${atStreet(along * 1000)}`, categoria: CAT[p.cat].one, cat: p.cat, distancia_da_rota_m: Math.round(dist),
+      if (along * 1000 < 80 || along * 1000 > routeM - 40) return null;
+      const kind = poiKind(p);
+      return { id: p.id, nome: poiClearName(p) || `${kind.tipo}${atStreet(along * 1000)}`, nome_no_mapa: p.name || null,
+        categoria: kind.tipo, cat: p.cat, scene: kind.scene, ideia: kind.idea, distancia_da_rota_m: Math.round(dist),
         hora_aprox: hhmm(new Date(leave.getTime() + (along / t.length) * t.time * 1000)), along, lng: p.lng, lat: p.lat };
     })
     .filter(Boolean).sort((a, b) => a.along - b.along).slice(0, 15);
@@ -215,11 +249,12 @@ function buildFacts() {
   // Nuvens: média da hora da caminhada até 1 h depois da chegada.
   const c = cloudsBetween(leave, new Date(arrive.getTime() + 3600e3));
 
+  const destKind = t.dest ? poiKind(t.dest) : null;
   const facts = {
     data: state.date, fuso: tzName(),
     origem: { nome: state.point.label?.split(' · ')[0] || `ponto de partida escolhido no mapa${atStreet(0, 'na')}`, lat: state.point.lat, lng: state.point.lng },
-    destino: { nome: t.dest?.name || `${t.dest ? `${CAT[t.dest.cat].one} sem nome no mapa` : 'destino escolhido no mapa'}${atStreet(routeM, 'na')}`,
-      categoria: t.dest ? CAT[t.dest.cat].one : null, lat: round(lat), lng: round(lng) },
+    destino: { nome: (t.dest && poiClearName(t.dest)) || `${t.dest ? destKind.tipo : 'destino escolhido no mapa'}${atStreet(routeM, 'na')}`,
+      categoria: t.dest ? destKind.tipo : null, lat: round(lat), lng: round(lng) },
     caminhada: { saida: hhmm(leave), chegada: hhmm(arrive), duracao_min: Math.round(t.time / 60), distancia_km: +t.length.toFixed(2),
       ritmo: paceOf(state.speed).label, velocidade_kmh: state.speed, evitar_ladeiras: state.hills > 0.5 },
     elevacao,
@@ -229,11 +264,12 @@ function buildFacts() {
       proximo_evento: next ? { evento: next[0], hora: hhmm(next[1]), minutos_apos_chegada: Math.round((next[1] - arrive) / 60e3) } : null },
     nuvens: c ? { total_pct: c.total, baixas_pct: c.low, altas_pct: c.high } : null,
     trechos,
-    pontos_no_caminho: pontos.map(({ id: _id, along, lng: _x, lat: _y, cat, ...rest }) => rest),
+    pontos_no_caminho: pontos.map(({ id: _id, along, lng: _x, lat: _y, cat, scene, ideia, ...rest }) => rest),
     estilos_preferidos: PHOTO_STYLES.filter((x) => state.styles.has(x.id)).map((x) => x.label),
     _pontos: pontos, // uso interno das regras (coordenadas, categoria); não vai no JSON exibido
     _styles: [...state.styles],
     _destCat: t.dest?.cat || null,
+    _destScene: destKind?.scene || null,
   };
   facts.configuracoes_camera = cameraSettingsFor(facts);
   return facts;
@@ -256,6 +292,8 @@ const CAMERA = {
   sombras: { iso: '100', ap: 'f/8', ss: '1/500 s', ev: '−0,7 a −1', why: 'Subexpor deixa as sombras pretas e realça formas e linhas; f/8 mantém as bordas nítidas.' },
   agua: { iso: '100', ap: 'f/11', ss: '1/2–2 s', why: 'Exposição longa deixa a água sedosa; ISO 100 e f/11 reduzem a luz para caber segundos de exposição (precisa de apoio). Na mão, 1/1000 s congela as gotas.' },
   'retrato sombra': { iso: '200–400', ap: 'f/2–2.8', ss: '1/250 s', why: 'A sombra aberta dá luz suave no rosto, sem olhos apertados; o diafragma aberto separa a pessoa do fundo.' },
+  // Estátua, busto, mural, monumento, placa: uma peça, não uma fachada.
+  obra: { iso: '100–400', ap: 'f/5.6–8', ss: '1/250 s', why: 'Uma peça (estátua, busto, mural) cabe inteira em foco com f/5.6–8; chegando perto, o fundo ainda desfoca um pouco. ISO baixo mantém cor e textura limpas e 1/250 s evita tremido.' },
 };
 // Formato padrão exibido e enviado: "(ISO: 100–400, Aperture: f/5.6–8, Shutter Speed: 1/250 s, EV: −0,3)".
 const camText = (c) => `(ISO: ${c.iso}, Aperture: ${c.ap}, Shutter Speed: ${c.ss}${c.ev ? `, EV: ${c.ev}` : ''})`;
@@ -265,6 +303,7 @@ const CAMERA_LOW = {
   arquitetura: { iso: '1600–3200', ap: 'f/4–5.6', ss: '1/30–1/60 s', why: 'Fachadas acesas têm bem menos luz que de dia: f/4–5.6 ainda mantém boa parte do prédio em foco e 1/30–1/60 s pede mão firme. Com apoio, ISO 100, f/8 e 2–8 s deixam a fachada limpa e nítida.' },
   agua: { iso: '100', ap: 'f/8', ss: '2–10 s', why: 'À noite a água vira espelho das luzes: com apoio, a exposição longa alisa a superfície e deixa os reflexos contínuos.' },
   'retrato sombra': { iso: '1600–3200', ap: 'f/1.8–2.8', ss: '1/125 s', why: 'Pouca luz: diafragma bem aberto e ISO alto; 1/125 s evita borrar pequenos movimentos. Procure uma vitrine ou poste iluminando o rosto.' },
+  obra: { iso: '1600–3200', ap: 'f/2.8–4', ss: '1/60 s', why: 'A peça só recebe luz de poste, refletor ou vitrine: diafragma aberto e ISO alto mantêm 1/60 s na mão. Meça a luz pela peça iluminada, não pelo céu, para ela não sair estourada.' },
 };
 // Dentro de um lugar (café, igreja…): luz artificial e bem mais fraca que a da rua.
 CAMERA.interior = { iso: '1600–3200', ap: 'f/2–2.8', ss: '1/60–1/125 s', why: 'Ambientes internos têm muito menos luz que a rua, mesmo de dia: diafragma aberto e ISO alto mantêm uma velocidade segura para fotografar na mão. Ajuste o balanço de branco para a luz do lugar (quente, de lâmpada).' };
@@ -315,7 +354,7 @@ function renderTrip() {
   $('#trip-result').innerHTML = `Saindo <b>${f.caminhada.saida}</b> → chegando <b>${f.caminhada.chegada}</b>` +
     ` (${f.caminhada.duracao_min} min)<br>Na chegada: <b>${L.na_chegada.fase}</b>, sol a ${L.na_chegada.altitude_sol}°${esc(next)}` +
     (f.nuvens ? `<br>Nuvens previstas: ${f.nuvens.total_pct}% (baixas ${f.nuvens.baixas_pct}%, altas ${f.nuvens.altas_pct}%)` : '<br><small>Sem previsão de nuvens para esse horário (só 3 dias).</small>');
-  const { _pontos, _styles, _destCat, ...shown } = f;
+  const { _pontos, _styles, _destCat, _destScene, ...shown } = f;
   $('#facts').textContent = JSON.stringify(shown, null, 2);
   renderTips(f);
   if (!$("#ai-size").children.length) renderAiControls();

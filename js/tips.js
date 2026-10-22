@@ -102,15 +102,15 @@ const RULES = [
       text: `${e.max_m - e.min_m} m acima do ponto mais baixo do trajeto: costuma ter a vista mais aberta da caminhada.` };
   },
   (f) => {
-    const p = ptsOf(f, ['historic', 'worship']);
+    const p = ptsOf(f, ['historic', 'worship']).filter((x) => x.scene === 'arquitetura'); // monumentos e placas vão com as obras
     return p.length && { icon: '🏛️', title: `${p.length} ${p.length === 1 ? 'construção histórica' : 'construções históricas'} no caminho`, score: 72, styles: ['arquitetura'],
       at: [p[0].lng, p[0].lat], text: `${ptsText(p)}.` };
   },
   (f) => {
-    const p = ptsOf(f, ['artwork']);
+    const p = f._pontos.filter((x) => x.scene === 'obra');
     if (!p.length) return;
     const hard = ['sol alto', 'sol a pino'].includes(f.luz.na_chegada.fase) && !(f.nuvens?.total_pct >= 60);
-    return { icon: '🎨', title: `${p.length} ${p.length === 1 ? 'obra de arte' : 'obras de arte'} no caminho`, score: 80, styles: ['arte', 'street'], at: [p[0].lng, p[0].lat],
+    return { icon: '🎨', title: `${p.length} ${p.length === 1 ? 'obra ou monumento' : 'obras e monumentos'} no caminho`, score: 80, styles: ['arte', 'street'], at: [p[0].lng, p[0].lat],
       text: `${ptsText(p)}.${hard ? ' Com sol forte, murais rendem melhor na sombra inteira: sol parcial cria manchas.' : ''}` };
   },
   (f) => {
