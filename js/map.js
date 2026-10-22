@@ -13,6 +13,10 @@ const map = new maplibregl.Map({
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'top-right');
 map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } }), 'top-right');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+// Se a página carregou numa aba oculta, o canvas pode ficar com o tamanho padrão (300 px) até o próximo resize.
+for (const ev of ['resize', 'orientationchange']) window.addEventListener(ev, () => map.resize());
+document.addEventListener('visibilitychange', () => { if (!document.hidden) map.resize(); });
+map.once('load', () => map.resize());
 
 // ==== CAMADAS (sobrevivem à troca de estilo) ====
 // setStyle() apaga sources/layers custom; cada overlay registrado é re-adicionado em todo 'style.load'.
@@ -68,14 +72,21 @@ const pin = new maplibregl.Marker({ color: '#e5484d', draggable: true });
 pin.on('dragend', () => { const { lng, lat } = pin.getLngLat(); setPoint(lat, lng, null, { fly: false }); });
 
 // Clique dentro da mancha = rota até lá; fora = novo ponto. Clique direito sempre move o pin.
+// Durante um carregamento iniciado pelo usuário o mapa não dispara outra ação (o painel mostra "Cancelar").
+const mapLocked = () => {
+  if (!opBusy()) return false;
+  toast('Aguarde o carregamento terminar ou clique em "Cancelar" no painel.', 'info', 2500);
+  return true;
+};
 map.on('click', (e) => {
+  if (mapLocked()) return;
   const { lat, lng } = e.lngLat;
   const poi = map.getLayer('poi') && map.queryRenderedFeatures(e.point, { layers: ['poi'] })[0];
   if (poi) openPoi(poi.properties.id);
   else if (insideIsochrone(lng, lat)) showRoute(lat, lng, null, { show: true });
   else setPoint(lat, lng, null, { fly: false });
 });
-map.on('contextmenu', (e) => setPoint(e.lngLat.lat, e.lngLat.lng, null, { fly: false }));
+map.on('contextmenu', (e) => { if (!mapLocked()) setPoint(e.lngLat.lat, e.lngLat.lng, null, { fly: false }); });
 
 // ==== PONTO DE PARTIDA ====
 function setPoint(lat, lng, label = null, { fly = true, show = true } = {}) {
