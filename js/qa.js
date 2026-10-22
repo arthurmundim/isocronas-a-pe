@@ -52,10 +52,12 @@ function lightNow(m) {
   return `Sol a ${Math.round(s.alt)}° de altura, vindo de ${cardinal(s.az)}${t ? `; nesse trecho você anda para ${t.rumo}, então a luz fica como ${t.luz}` : ''}.`;
 }
 
-const isoHigh = (m) => isLowLight(m.phase) || parseInt(m.camera.iso, 10) >= 400;
+// A pergunta do ISO segue o ISO configurado, não só a fase: à noite, a fonte usa ISO 100 com exposição longa.
+// 'high' (ISO ≥ 400), 'long' (ISO baixo com pouca luz, compensado pelo tempo de exposição) ou 'low' (luz de sobra).
+const isoCase = (m) => (parseInt(m.camera.iso, 10) >= 400 ? 'high' : isLowLight(m.phase) ? 'long' : 'low');
 // Só o que é do próprio lugar (sem o vizinho fundido em "; logo antes, X: …"), para o modelo não misturar.
 const mainVer = (m) => m.ver.split('; logo antes')[0];
-const composeHint = (m) => COMPOSE[m.kind] || COMPOSE[m.cat] || (isLowLight(m.phase) ? COMPOSE.evento : 'Escolha um primeiro plano e deixe a luz vir de lado para dar volume.');
+const composeHint = (m) => COMPOSE[m.kind] || (m.scene === 'obra' ? COMPOSE.artwork : COMPOSE[m.cat]) ||(isLowLight(m.phase) ? COMPOSE.evento : 'Escolha um primeiro plano e deixe a luz vir de lado para dar volume.');
 
 // ---- Banco de perguntas (ordem = prioridade) ----
 // applies: se faz sentido para o bloco; goal: o que a resposta precisa fazer; data: tópicos "Rótulo: valor" que a IA
@@ -75,15 +77,20 @@ const QA_BANK = [
     data: (m) => [['O que observar', mainVer(m)], ['Dica de enquadramento', composeHint(m)]] },
   // A pergunta segue o ISO real: alto (pouca luz ou céu fechado) ou baixo (luz farta).
   { id: 'iso_low', applies: () => true, cam: (m) => m.camera,
-    text: (m) => (isoHigh(m) ? 'Por que não dá para usar um ISO mais baixo aqui?' : 'Por que o ISO pode ficar baixo aqui?'),
-    goal: 'explicar a escolha do ISO pela quantidade de luz', polarity: (m) => (isoHigh(m) ? 'nao' : 'sim'),
-    answer: (m) => (isoHigh(m) ? 'Não dá: com essa luz, um ISO mais baixo deixaria a foto tremida ou escura.' : 'Pode, sim: há luz de sobra para um ISO baixo.'),
-    data: (m, c) => (isoHigh(m)
-      ? [['Veredito', 'um ISO mais baixo não serve aqui'], ['Luz no momento', `${m.phase}${c.blocked ? ', céu encoberto' : ''}`],
-        ['Por que esse ISO', 'ISO menor exigiria velocidade mais lenta (foto tremida ou gente borrada) ou mais abertura do que a lente costuma ter'], ['Motivo técnico', m.camera.why]]
-      : [['Veredito', 'o ISO pode ficar baixo aqui'], ['Luz no momento', m.phase],
-        ['Por que esse ISO', 'há luz suficiente: ISO baixo dá menos ruído e mais detalhe, e ainda sobra velocidade'], ['Motivo técnico', m.camera.why]]) },
-  { id: 'inside', applies: (m) => ['cafe', 'worship', 'historic'].includes(m.cat), text: (m) => `E se eu entrar em ${m.onde}?`,
+    text: (m) => ({ high: 'Por que não dá para usar um ISO mais baixo aqui?', long: 'Por que o ISO fica baixo mesmo com pouca luz?', low: 'Por que o ISO pode ficar baixo aqui?' }[isoCase(m)]),
+    goal: 'explicar a escolha do ISO pela quantidade de luz', polarity: (m) => (isoCase(m) === 'high' ? 'nao' : 'sim'),
+    answer: (m) => ({ high: 'Não dá: com essa luz, um ISO mais baixo deixaria a foto tremida ou escura.',
+      long: 'Porque quem junta a luz aqui é o tempo de exposição, não o ISO.', low: 'Pode, sim: há luz de sobra para um ISO baixo.' }[isoCase(m)]),
+    data: (m, c) => ({
+      high: [['Veredito', 'um ISO mais baixo não serve aqui'], ['Luz no momento', `${m.phase}${c.blocked ? ', céu encoberto' : ''}`],
+        ['Por que esse ISO', 'ISO menor exigiria velocidade mais lenta (foto tremida ou gente borrada) ou mais abertura do que a lente costuma ter'], ['Motivo técnico', m.camera.why]],
+      long: [['Veredito', 'o ISO fica baixo porque a exposição é longa'], ['Luz no momento', m.phase],
+        ['Por que esse ISO', 'com a câmera apoiada, alguns segundos de exposição juntam a luz que falta; o ISO baixo evita ruído e deixa a água e as luzes limpas'], ['Motivo técnico', m.camera.why]],
+      low: [['Veredito', 'o ISO pode ficar baixo aqui'], ['Luz no momento', m.phase],
+        ['Por que esse ISO', 'há luz suficiente: ISO baixo dá menos ruído e mais detalhe, e ainda sobra velocidade'], ['Motivo técnico', m.camera.why]],
+    }[isoCase(m)]) },
+  // Não dá para "entrar" num monumento ou numa estátua.
+  { id: 'inside', applies: (m) => ['cafe', 'worship', 'historic'].includes(m.cat) && m.scene !== 'obra', text: (m) => `E se eu entrar em ${m.onde}?`,
     cam: () => CAMERA.interior, goal: 'explicar por que a configuração muda lá dentro', polarity: 'muda',
     answer: () => 'Muda: lá dentro a luz é bem mais fraca, então use a configuração de interior.',
     data: (m, c, cam) => [['Veredito', 'lá dentro muda a configuração (a de interior, mostrada ao lado)'],
@@ -101,10 +108,19 @@ const QA_BANK = [
     goal: `sugerir o que fotografar aqui pensando em ${s.label.toLowerCase()}`,
     data: (m) => [[`Para ${s.label.toLowerCase()}`, STYLE_HINTS[s.id]], ['Neste momento', mainVer(m)]] })),
 ];
+// Um trio variado: uma técnica, uma de luz/composição e uma do lugar ou do seu estilo. A posição em cada grupo gira
+// com o número do bloco e com as perguntas já feitas, para blocos vizinhos e rodadas seguintes não repetirem o trio.
+const QA_GROUPS = [['why_cam', 'iso_low', 'cloudy', 'phone'], ['compose', 'light'], null]; // null = lugar e estilos
+const qaGroup = (id) => { const g = QA_GROUPS.findIndex((ids) => ids?.includes(id)); return g < 0 ? 2 : g; };
 function qaOptions(i) {
   const m = qaState.moments[i], b = qaBlock(i);
   const c = { blocked: qaState.facts.nuvens?.total_pct >= 85, styles: new Set(qaState.facts._styles) };
-  return QA_BANK.filter((q) => !b.asked.has(q.id) && q.applies(m, c)).slice(0, 3).map((q) => ({ id: q.id, text: q.text(m) }));
+  const avail = QA_BANK.filter((q) => !b.asked.has(q.id) && q.applies(m, c));
+  const turn = i + b.asked.size;
+  const picked = [0, 1, 2].map((g) => { const list = avail.filter((q) => qaGroup(q.id) === g); return list.length ? list[turn % list.length] : null; }).filter(Boolean);
+  // Grupo vazio (ex.: sem estilo marcado e lugar sem pergunta própria): completa com o que sobrou, na ordem do banco.
+  for (const q of avail) if (picked.length < 3 && !picked.includes(q)) picked.push(q);
+  return picked.map((q) => ({ id: q.id, text: q.text(m) }));
 }
 
 // ---- IA: reescrever perguntas e responder ----
@@ -223,7 +239,7 @@ function qaParse(text) {
     return { resposta: get(/resposta"?\s*:\s*"?([^"\n]+)/i), porque: get(/porque"?\s*:\s*"?([^"\n]+)/i), dica: get(/dica"?\s*:\s*"?([^"\n]+)/i) };
   }
 }
-function qaCheck(res, known, forbidden) {
+function qaCheck(res, known, forbidden, ctx = null) {
   const issues = [];
   for (const k of QA_FIELDS) {
     const n = (res[k].match(/\S+/g) || []).length;
@@ -240,7 +256,31 @@ function qaCheck(res, known, forbidden) {
   const names = text.match(/[A-ZÀ-Ú][a-zà-ú]+(?:\s+(?:de|da|do|dos|das|e)?\s*[A-ZÀ-Ú][a-zà-ú]+)+/g) || [];
   const strange = names.filter((n) => !norm(known).includes(norm(n)));
   if (strange.length) issues.push(`citou lugar fora dos dados (${[...new Set(strange)].join(', ')})`);
+  if (ctx) issues.push(...qaCoherence(res, known, ctx));
   return issues;
+}
+// Coerência (testado: o modelo citava o prompt, repetia a resposta no "porquê", trazia a blue hour do exemplo para a
+// golden hour e dava dica contrária à configuração mostrada ao lado).
+function qaCoherence(res, known, { m, cam }) {
+  const out = [];
+  const text = QA_FIELDS.map((k) => res[k]).join(' ');
+  const kn = known.toLowerCase();
+  if (/veredito|dados (fornecidos|informados|acima)|de acordo com os dados|segundo os dados|objetivo/i.test(text)) out.push('citou as instruções em vez de responder');
+  const words = (s) => new Set(normTxt(s).split(' ').filter((w) => w.length > 3));
+  const a = words(res.resposta), p = words(res.porque);
+  if (p.size && [...p].filter((w) => a.has(w)).length / p.size >= 0.6) out.push('o "porquê" repete a resposta');
+  if (!isLowLight(m.phase) && /c[ée]u (ainda )?azul|luzes (da rua |da cidade )?(est[ãa]o )?acesas|postes acesos|letreiros acesos|blue hour/i.test(text) && !/blue hour|acesa/.test(kn))
+    out.push(`falou de luz de noite com ${m.phase}`);
+  if (isLowLight(m.phase) && /dourad|golden|sol (baixo|forte|direto)|luz do sol/i.test(text) && !/dourad|golden/.test(kn)) out.push(`falou de sol na ${m.phase}`);
+  // Frase sem sujeito técnico: "a abertura da fachada" (o número que tiramos dos dados virou o lugar).
+  if (/abertura d[aoe]s? (fachada|pr[ée]dio|igreja|obra|pe[çc]a|parque|lugar|pra[çc]a|rua)/i.test(text)) out.push('frase sem sentido técnico');
+  const cfg = cam || m.camera, ap = parseFloat(cfg.ap.replace('f/', '')), iso = parseInt(cfg.iso, 10);
+  const dica = res.dica.toLowerCase();
+  if ((ap >= 5.6 && /abertura maior|diafragma (mais )?aberto|abr(a|ir) (mais )?o diafragma/.test(dica))
+    || (ap <= 2.8 && /abertura menor|fech(e|ar) (mais )?o diafragma/.test(dica))
+    || (iso >= 1600 && /(use|usar|baixe|baixar|mantenha) (um )?iso (mais )?baixo/.test(dica))
+    || (iso <= 200 && /(use|usar|suba|subir|aumente|aumentar) (o |um )?iso( mais)? alto|aument(e|ar) o iso|sub(a|ir) o iso/.test(dica))) out.push('a dica contradiz a configuração');
+  return out;
 }
 let qaGrammar = true; // cai para JSON "no texto" se o WebLLM recusar response_format
 // A 1ª chamada com gramática compila o formato (~25 s); fazemos isso em segundo plano logo depois do texto da IA,
@@ -254,7 +294,7 @@ function qaWarmup() {
     .finally(() => { if (qaState.pending === job) qaState.pending = null; });
   qaState.pending = job;
 }
-async function qaAnswer(m, q, tpl, data, forbidden, isCancelled = () => false) {
+async function qaAnswer(m, q, tpl, data, forbidden, cam = null, isCancelled = () => false) {
   const engine = await aiEngine();
   const known = `${m.hora} ${m.onde} ${m.ver} ${dataText(data)}`;
   let res = null, issues = [];
@@ -272,7 +312,7 @@ async function qaAnswer(m, q, tpl, data, forbidden, isCancelled = () => false) {
     for (const k of QA_FIELDS) res[k] = firstSentence(res[k]);
     // Em perguntas de sim/não, a frase de resposta é a do app: o modelo já inverteu o veredito ("Não funciona").
     if (tpl.answer) res.resposta = tpl.answer(m);
-    issues = qaCheck(res, known, forbidden);
+    issues = qaCheck(res, known, forbidden, { m, cam });
     // O "porquê" e a dica também não podem contradizer o veredito.
     const pol = typeof tpl.polarity === 'function' ? tpl.polarity(m) : tpl.polarity;
     const rest = `${res.porque} ${res.dica}`.toLowerCase();
@@ -289,12 +329,13 @@ async function qaAnswer(m, q, tpl, data, forbidden, isCancelled = () => false) {
 // Resposta calculada pelo app (quando a IA erra duas vezes): veredito, motivo técnico e dica, direto dos dados.
 function qaFallback(data, cam, tpl, m) {
   const get = (...keys) => data.find(([k]) => keys.includes(k))?.[1];
-  const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-  return {
-    resposta: tpl.answer?.(m) || cap(get('Veredito')) || 'Resposta calculada pelo app.',
-    porque: cap(get('Por que esse ISO', 'Motivo técnico', 'De onde vem a luz', 'O que muda', 'Luz lá dentro')) || cam?.why || '',
-    dica: cap(get('Dica de enquadramento', 'No celular') || data.find(([k]) => k.startsWith('Para '))?.[1]) || '',
-  };
+  const cap = (s) => (s ? `${s.charAt(0).toUpperCase()}${s.slice(1)}${/[.!?]$/.test(s) ? '' : '.'}` : s);
+  // Sem veredito: uma frase do próprio dado principal da pergunta (nunca um texto genérico).
+  const lead = tpl.id === 'why_cam' ? `É a configuração que combina com a luz deste momento (${m.phase}) e com a cena.`
+    : cap(get('Dica de enquadramento', 'De onde vem a luz', 'No celular') || data.find(([k]) => k.startsWith('Para '))?.[1] || data[0]?.[1]);
+  const porque = cap(get('Por que esse ISO', 'Motivo técnico', 'O que muda', 'Luz lá dentro')) || cam?.why || cap(get('O que observar', 'Neste momento')) || '';
+  const dica = cap(get('Dica de enquadramento', 'No celular')) || composeHint(m);
+  return { resposta: tpl.answer?.(m) || cap(get('Veredito')) || lead, porque, dica: dica === lead ? '' : dica };
 }
 
 // ---- UI ----
@@ -364,7 +405,7 @@ async function qaAsk(i, id) {
   try {
     await qaState.pending; // espera a reescrita de perguntas liberar o motor
     // Fica em qaState.pending para nada usar o motor ao mesmo tempo (mesmo depois de um Cancelar).
-    const job = qaAnswer(m, opt.text, tpl, data, qaForbidden(m, c, cam, tpl), () => cancelled);
+    const job = qaAnswer(m, opt.text, tpl, data, qaForbidden(m, c, cam, tpl), cam, () => cancelled);
     const pend = job.catch(() => {}).finally(() => { if (qaState.pending === pend) qaState.pending = null; });
     qaState.pending = pend;
     const { res, issues } = await job;
