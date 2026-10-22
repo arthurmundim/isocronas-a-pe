@@ -14,7 +14,7 @@ const AI = {
   },
 };
 // mode: null (nada escolhido ainda), 'quick' (resposta rápida) ou 'ai'.
-const aiState = { webllm: null, engine: null, modelId: null, loading: null, busy: false, size: 'medio', factsKey: null, unsupported: null, mode: null };
+const aiState = { webllm: null, engine: null, modelId: null, loading: null, busy: false, size: 'medio', factsKey: null, unsupported: null, mode: null, gen: 0, cancelled: false };
 try { aiState.size = localStorage.getItem('isocronas.aiSize') || 'medio'; } catch { /* sem armazenamento */ }
 
 // Motivo de não suportar, ou null. Checado uma vez, antes de qualquer download.
@@ -114,7 +114,7 @@ function aiMoments(f, n) {
     const ph = phaseAtTime(p.hora_aprox);
     // Cena de retrato só para quem marcou retrato; sem isso, o parque segue a luz do momento.
     const scene = cam === 'retrato sombra' && !styles.has('retrato') ? null : cam;
-    add({ hora: p.hora_aprox, onde: p.nome, prio: likes(CAT_STYLES[p.cat] || []) ? 84 : 66, ver: idea, phase: ph, scene, cat: p.cat, camera: cameraForScene(scene, ph, blocked) });
+    add({ hora: p.hora_aprox, onde: p.nome, prio: likes(CAT_STYLES[p.cat] || []) ? 84 : 66, ver: idea, phase: ph, scene, cat: p.cat, pid: p.id, camera: cameraForScene(scene, ph, blocked) });
   }
   // Momentos colados na saída ou na chegada (≤ 3 min) viram parte delas, para não repetir horário.
   const start = cand.find((m) => m.inicio), end = cand.find((m) => m.fim);
@@ -123,11 +123,12 @@ function aiMoments(f, n) {
     if (m === start || m === end) return true;
     if (m.t <= 3 && m.kind === 'evento') { start.ver += `; ${m.ver.replace(/: a luz muda$/, ' bem na saída')}`; return false; }
     if (m.t <= 3 && start.onde === f.origem.nome) {
-      Object.assign(start, { kind: m.kind, onde: m.onde, ver: `${start.ver}; ${m.ver}`, camera: m.camera, scene: m.scene, cat: m.cat, phase: m.phase || start.phase });
+      Object.assign(start, { kind: m.kind, onde: m.onde, ver: `${start.ver}; ${m.ver}`, camera: m.camera, scene: m.scene, cat: m.cat, pid: m.pid, phase: m.phase || start.phase });
       return false;
     }
     if (endT - m.t <= 3) {
       // Evento de luz vira "bem na chegada"; lugar próximo mantém o nome (senão "igreja" aparecia no bloco do café).
+      if (m.pid) (end.extraPids ||= []).push(m.pid); // destacado no mapa junto com o destino
       end.ver += m.kind === 'evento' ? `; ${m.ver.replace(/: a luz muda$/, ' bem na chegada')}` : `; logo antes, ${m.onde}: ${m.ver}`;
       return false;
     }
@@ -253,6 +254,7 @@ function aiCheck(text, f, moments) {
 
 // ==== UI ====
 function aiProgress(p, text = '') {
+  if (aiState.cancelled) p = null; // download segue em segundo plano após cancelar, sem mostrar barra
   const box = $('#ai-progress');
   box.hidden = p == null;
   if (p == null) return;
@@ -275,7 +277,8 @@ function parseAiLines(text) {
 }
 // Estrutura fixa por momento: hora · lugar, a frase da IA, a configuração no formato padrão e o motivo técnico.
 // Se a IA não escreveu um momento, entra a descrição determinística dele.
-function renderAiOut(text, done, moments) {
+// animate: cada momento entra em sequência (fade), uma única vez, depois que o texto inteiro está pronto.
+function renderAiOut(text, done, moments, { animate = false } = {}) {
   const lines = parseAiLines(text);
   const last = Math.max(0, ...Object.keys(lines).map(Number));
   const shown = done ? moments : moments.slice(0, Math.max(1, last));
@@ -285,7 +288,7 @@ function renderAiOut(text, done, moments) {
     const said = lines[i + 1]?.replace(placePrefix, '').replace(/^./, (c) => c.toUpperCase());
     const typing = !done && i + 1 === Math.max(1, last);
     const body = said ? esc(said) : done ? `${esc(m.ver[0].toUpperCase() + m.ver.slice(1))}.` : '';
-    return `<div class="ai-moment"><div class="ai-when">${esc(m.hora)} · ${esc(m.onde)}</div>
+    return `<div class="ai-moment${animate ? ' ai-in' : ''}" style="animation-delay:${(i * 0.4).toFixed(1)}s"><div class="ai-when">${esc(m.hora)} · ${esc(m.onde)}</div>
       <p>${body}${typing ? '<span class="ai-caret"></span>' : ''}</p>
       ${!typing || done ? `<p class="ai-cam">📷 ${esc(camText(m.camera))}</p><p class="ai-why"><b>Por quê:</b> ${esc(m.camera.why)}</p>` : ''}${done ? qaBlockHtml(i) : ''}</div>`;
   }).join('');
@@ -295,7 +298,7 @@ async function renderAiControls() {
     `<button type="button" role="radio" aria-checked="${k === aiState.size}" data-size="${k}">${s.label}<small>${s.read}</small></button>`).join('');
   $('#quick-go').setAttribute('aria-pressed', String(aiState.mode === 'quick'));
   $('#ai-go').setAttribute('aria-pressed', String(aiState.mode === 'ai'));
-  $('#ai-stop').hidden = !aiState.busy;
+
   const reason = await aiSupport();
   // Sem suporte, o botão continua visível (desativado) com o motivo, para não parecer que sumiu.
   $('#ai-unsupported').hidden = !reason;
@@ -319,70 +322,116 @@ function setSuggestMode(mode) {
   renderAiControls();
 }
 function resetSuggest() {
-  if (aiState.busy) aiState.engine?.interruptGenerate();
+  if (aiState.busy) aiInterrupt();
   $('#ai-out').innerHTML = '';
   setStatus('ai-status', '');
   qaReset();
   setSuggestMode(null);
+  focusReset();
+}
+
+// interruptGenerate() com o modelo parado fica "armado" e corta a PRÓXIMA geração (que sai vazia):
+// só interrompe quando há uma geração em andamento. Toda chamada ao motor passa por engineRun.
+// Além disso, no WebLLM 0.2.85 a chamada sem streaming checa o sinal antes de gerar e nunca o zera: depois de um
+// "Cancelar", todas as respostas seguintes sairiam vazias. Zeramos o sinal quando o motor fica livre.
+let aiGenerating = 0;
+async function engineRun(fn) {
+  aiGenerating++;
+  try { return await fn(); } finally {
+    aiGenerating--;
+    if (aiGenerating === 0 && aiState.engine && 'interruptSignal' in aiState.engine) aiState.engine.interruptSignal = false;
+  }
+}
+function aiInterrupt() {
+  if (aiGenerating > 0) aiState.engine?.interruptGenerate();
+}
+
+// Cancelar a IA: interrompe o modelo e volta à escolha entre resposta rápida e IA. Um download do modelo já
+// iniciado continua em segundo plano (o WebLLM não permite abortá-lo), mas o resultado é ignorado.
+function cancelAi() {
+  aiState.cancelled = true;
+  aiState.gen++; // a geração em andamento passa a ser ignorada
+  aiState.busy = false;
+  aiInterrupt();
+  aiProgress(null);
+  $('#ai-out').innerHTML = '';
+  setStatus('ai-status', '');
+  qaReset();
+  focusReset();
+  setSuggestMode(null);
+  openStep('suggest');
+  setStatus('ai-status', 'Geração cancelada. Escolha de novo quando quiser.');
+  $('#ai-status').hidden = false;
+  reveal(stepEl('suggest'));
 }
 
 async function aiGenerate() {
-  if (aiState.busy) { aiState.engine?.interruptGenerate(); return; }
   if (qaState.busy) return; // uma requisição por vez no motor
+  // Geração atual: um "Cancelar" incrementa aiState.gen e a geração antiga, quando terminar, não mexe em nada.
+  const gen = ++aiState.gen;
+  const stale = () => gen !== aiState.gen;
   const f = buildFacts();
   if (!f) return;
   setSuggestMode('ai');
+  focusReset(); // o foco da resposta rápida sai enquanto a IA escreve
   collapseStep('suggest');
   aiState.busy = true;
+  aiState.cancelled = false;
   const moments = aiMoments(f, AI.sizes[aiState.size].moments);
   aiState.factsKey = momentsText(moments);
   qaReset(moments, f); // perguntas por bloco recomeçam a cada texto gerado
   renderAiControls();
   $('#ai-stale').hidden = true;
   $('#ai-out').innerHTML = '';
-  setStatus('ai-status', '');
-  reveal(aiState.engine ? '#ai-stop' : '#ai-progress');
+  setStatus('ai-status', aiState.engine ? 'Preparando…' : 'Carregando o modelo…', 'loading');
+  opStart('ai', '#ai-status', cancelAi);
+  reveal(aiState.engine ? '#ai-status' : '#ai-progress');
   try {
     await qaState.pending; // pré-aquecimento das perguntas ainda rodando: o motor atende um por vez
     const engine = await aiEngine();
-    setStatus('ai-status', 'Escrevendo…', 'loading');
-    reveal('#ai-out');
+    if (stale()) return;
     const t0 = performance.now();
-    const write = async (messages, temperature) => {
+    // Gera tudo antes de mostrar (a nova tentativa, se houver, não aparece como uma 2ª animação).
+    const write = (messages, temperature, label) => engineRun(async () => {
       const stream = await engine.chat.completions.create({
         messages, stream: true, temperature, top_p: 0.9, max_tokens: AI.sizes[aiState.size].maxTokens,
       });
-      let text = '', lastScroll = 0;
+      let text = '';
       for await (const chunk of stream) {
         text += chunk.choices[0]?.delta?.content || '';
-        renderAiOut(text, false, moments);
-        // Acompanha o texto sendo escrito, sem rolar a cada token.
-        if (performance.now() - lastScroll > 500) { lastScroll = performance.now(); reveal('#ai-status', 'nearest'); }
+        const done = Math.min(moments.length, Object.keys(parseAiLines(text)).length);
+        setStatus('ai-status', `${label} (${done} de ${moments.length} momentos)…`, 'loading');
       }
-      renderAiOut(text, true, moments);
       return text;
-    };
-    let text = await write(aiMessages(f, moments), 0.3);
+    });
+    let text = await write(aiMessages(f, moments), 0.3, 'Escrevendo');
     let issues = aiCheck(text, f, moments);
     // Uma nova tentativa, mais conservadora, apontando o que saiu errado.
-    if (issues.length && aiState.busy) {
-      setStatus('ai-status', `Revisando: a 1ª versão tinha ${issues.join('; ')}…`, 'loading');
+    if (issues.length && !stale()) {
       const fix = `Atenção: na versão anterior você errou (${issues.join('; ')}). Corrija seguindo as regras.`;
-      text = await write(aiMessages(f, moments, fix), 0.1);
+      text = await write(aiMessages(f, moments, fix), 0.1, 'Revisando');
       issues = aiCheck(text, f, moments);
     }
+    if (stale()) return;
+    opEnd('ai');
+    renderAiOut(text, true, moments, { animate: true });
+    reveal('#ai-out');
     const secs = ((performance.now() - t0) / 1000).toFixed(0);
     const warn = issues.length ? ` ⚠️ Atenção: ${issues.join('; ')}. Confira na resposta rápida abaixo.` : ' Modelo pequeno: confira na resposta rápida abaixo.';
     setStatus('ai-status', `Gerado no seu aparelho em ${secs} s.${warn}`, issues.length ? 'error' : null);
+    flowSuggestionShown();
     qaWarmup(); // prepara o formato das respostas das perguntas em segundo plano
   } catch (e) {
+    if (stale()) return;
     console.error('IA', e);
     const msg = /device.*lost|out of memory|OOM|allocate/i.test(String(e?.message || e))
       ? 'o aparelho ficou sem memória de vídeo para o modelo. Feche outras abas e tente de novo.'
       : `não consegui rodar o modelo (${String(e?.message || e).slice(0, 120)}).`;
     setStatus('ai-status', `IA indisponível: ${msg} A resposta rápida continua disponível.`, true);
   } finally {
+    if (stale()) return; // cancelada: a tela já voltou para a escolha
     aiState.busy = false;
+    opEnd('ai');
     renderAiControls();
   }
 }
@@ -394,11 +443,11 @@ function aiOnFacts(f) {
 }
 
 $('#ai-go').addEventListener('click', aiGenerate);
-$('#ai-stop').addEventListener('click', () => aiState.engine?.interruptGenerate());
 $('#quick-go').addEventListener('click', () => {
   setSuggestMode('quick');
   collapseStep('suggest');
   reveal('#quick');
+  flowSuggestionShown(); // mapa destaca os pontos citados nas dicas
 });
 $('#ai-size').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-size]');

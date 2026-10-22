@@ -217,3 +217,12 @@ div.step + div.step, #trip > .step + #suggest { margin-top: 8px; }
 .qa-a { margin: 4px 0; padding: 6px 10px; border-radius: 12px 12px 12px 2px; background: var(--bg); border: 1px solid var(--border); font-size: 13px; line-height: 1.45; }
 .qa-a p { margin: 4px 0 0; }
 .qa-warn { color: var(--danger); font-size: 12px; }
+
+/* ==== CARREGAMENTO: TRAVA E CANCELAR ==== */
+#panel.busy-lock button:not(.op-cancel):not(#sheet-handle),
+#panel.busy-lock input, #panel.busy-lock select, #panel.busy-lock .chip { pointer-events: none; opacity: .5; }
+.op-cancel { display: inline-block; margin: 6px 0 0; padding: 5px 12px; border-color: var(--danger); color: var(--danger); background: var(--bg); }
+.op-cancel:hover { background: var(--danger); color: #fff; }
+.ai-in { opacity: 0; animation: ai-in .45s ease-out forwards; }
+@keyframes ai-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ai-in { animation: none; opacity: 1; } }

@@ -92,33 +92,44 @@ function clearPois() {
 }
 
 // Ícone de cada categoria: círculo colorido + emoji, desenhado em canvas.
-function categoryIcon(c) {
+// grey: versão apagada, usada no modo foco para o que não foi citado na sugestão.
+function categoryIcon(c, grey = false) {
   const s = 64, cv = document.createElement('canvas');
   cv.width = cv.height = s;
   const ctx = cv.getContext('2d');
   ctx.beginPath(); ctx.arc(s / 2, s / 2, s / 2 - 3, 0, Math.PI * 2);
-  ctx.fillStyle = c.color; ctx.fill();
+  ctx.fillStyle = grey ? '#a3aab8' : c.color; ctx.fill();
   ctx.lineWidth = 4; ctx.strokeStyle = '#fff'; ctx.stroke();
   ctx.font = '32px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (grey) ctx.filter = 'grayscale(1) opacity(0.7)';
   ctx.fillText(c.emoji, s / 2, s / 2 + 2);
   return ctx.getImageData(0, 0, s, s);
 }
 const poiFilter = () => ['in', ['get', 'cat'], ['literal', [...state.cats]]];
 registerOverlay(() => {
-  for (const c of CATEGORIES) if (!map.hasImage('poi-' + c.id)) map.addImage('poi-' + c.id, categoryIcon(c), { pixelRatio: 2 });
+  for (const c of CATEGORIES) {
+    if (!map.hasImage('poi-' + c.id)) map.addImage('poi-' + c.id, categoryIcon(c), { pixelRatio: 2 });
+    if (!map.hasImage('poi-grey-' + c.id)) map.addImage('poi-grey-' + c.id, categoryIcon(c, true), { pixelRatio: 2 });
+  }
   ensureSource('pois');
   map.addLayer({ id: 'poi', type: 'symbol', source: 'pois', filter: poiFilter(), layout: {
     'icon-image': ['concat', 'poi-', ['get', 'cat']], 'icon-allow-overlap': true, 'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.7, 16, 1],
     'symbol-sort-key': ['get', 'prio'],
   } });
+  // Nome dos pontos citados na sugestão (só aparece no modo foco).
+  map.addLayer({ id: 'poi-focus-label', type: 'symbol', source: 'pois', filter: ['in', ['get', 'id'], ['literal', []]], layout: {
+    'text-field': ['get', 'name'], 'text-font': ['Noto Sans Bold'], 'text-size': 12, 'text-offset': [0, 1.5], 'text-anchor': 'top',
+    'text-max-width': 10, 'text-allow-overlap': false,
+  }, paint: { 'text-color': '#1d2330', 'text-halo-color': '#ffffff', 'text-halo-width': 1.6 } });
+  if (typeof applyFocus === 'function') applyFocus(); // estilo trocado com o foco ligado
 });
 map.on('mouseenter', 'poi', () => { map.getCanvas().style.cursor = 'pointer'; });
 map.on('mouseleave', 'poi', () => { map.getCanvas().style.cursor = ''; });
 
 function renderPois() {
   const fc = { type: 'FeatureCollection', features: state.pois.map((p) =>
-    turf.point([p.lng, p.lat], { id: p.id, cat: p.cat, prio: CATEGORIES.indexOf(CAT[p.cat]) })) };
+    turf.point([p.lng, p.lat], { id: p.id, cat: p.cat, name: p.name || CAT[p.cat].one, prio: CATEGORIES.indexOf(CAT[p.cat]) })) };
   setSourceData('pois', fc);
   if (map.getLayer('poi')) map.setFilter('poi', poiFilter());
 

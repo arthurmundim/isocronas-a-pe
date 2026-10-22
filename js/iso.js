@@ -75,11 +75,57 @@ async function loadStreets(seq) {
     streetsShown = false; // sem ruas: volta a mancha de área
   }
   setIsoStale(false);
+  saveLastGood();
+  opEnd('walk'); // a mancha só está pronta quando as ruas chegam
 }
 
 function renderLegend() {
   const n = state.times.length;
   $('#legend').innerHTML = state.times.map((t, i) => `<span><i style="background:${ringColor(i, n)}"></i>até ${t} min</span>`).join('');
+}
+
+// Último resultado completo (ponto, parâmetros, mancha e pontos), para "Cancelar" voltar a ele.
+let lastGood = null;
+function saveLastGood() {
+  lastGood = { point: { ...state.point }, times: [...state.times], speed: state.speed, hills: state.hills,
+    iso: state.iso, streets: sourceData['iso-streets'], streetsShown, pois: state.pois };
+}
+function cancelWalk() {
+  isoSeq++;
+  abortApis(['Valhalla']);
+  // Pontos do ponto novo (Overpass) também não valem mais.
+  poiSeq++;
+  poiLoading = false;
+  abortApis(['Overpass']);
+  if (lastGood) {
+    Object.assign(state, { point: { ...lastGood.point }, times: [...lastGood.times], speed: lastGood.speed, hills: lastGood.hills,
+      iso: lastGood.iso, pois: lastGood.pois });
+    streetsShown = lastGood.streetsShown;
+    pin.setLngLat([state.point.lng, state.point.lat]).addTo(map);
+    setSourceData('iso', state.iso);
+    setSourceData('iso-streets', lastGood.streets);
+    syncControls();
+    renderLegend();
+    renderPois();
+    updateLight();
+    loadClouds(); // fuso e nuvens do ponto restaurado (do cache)
+    setIsoStale(false);
+    setStatus('search-status', state.point.label ? `📍 ${state.point.label}` : '');
+    setStatus('iso-status', 'Cálculo cancelado: voltamos ao resultado anterior.');
+    onStateChanged();
+  } else {
+    // Não havia resultado anterior: volta à escolha do ponto de partida.
+    state.point = null;
+    state.iso = null;
+    pin.remove();
+    setSourceData('iso', EMPTY);
+    setSourceData('iso-streets', EMPTY);
+    setStatus('iso-status', '');
+    hideStep('walk');
+    openStep('search');
+    setStatus('search-status', 'Cálculo cancelado. Escolha o ponto de partida de novo.');
+    onStateChanged();
+  }
 }
 
 let isoSeq = 0;
@@ -90,6 +136,7 @@ async function computeIsochrones() {
   const { lat, lng } = state.point;
   setStatus('iso-status', 'Calculando área alcançável…', 'loading');
   setIsoStale(true);
+  opStart('walk', '#iso-status', cancelWalk);
   try {
     const data = await valhalla('/isochrone', {
       locations: [{ lat, lon: lng }],
@@ -122,6 +169,7 @@ async function computeIsochrones() {
     setIsoStale(false);
     setStatus('iso-status', e.message, true);
     toast('Isócronas: ' + e.message);
+    opEnd('walk');
   }
 }
 function onIsochronesChanged() {
@@ -144,7 +192,9 @@ function ringOf(lng, lat) {
 // Com ruas: só as ruas (claras, para a rota escura destacar). Sem ruas: a área, como fallback.
 function setIsoStale(on) {
   if (!map.getLayer('iso-streets')) return;
-  map.setPaintProperty('iso-streets', 'line-opacity', streetsShown ? (on ? 0.15 : 0.55) : 0);
+  // No modo foco (flow.js) a mancha fica mais discreta, para a rota e os pontos citados aparecerem.
+  const focused = typeof mapFocus !== 'undefined' && mapFocus.on && mapFocus.available;
+  map.setPaintProperty('iso-streets', 'line-opacity', streetsShown ? (on ? 0.15 : focused ? 0.28 : 0.55) : 0);
   map.setPaintProperty('iso-fill', 'fill-opacity', streetsShown ? 0 : on ? 0.07 : 0.2);
   map.setPaintProperty('iso-line', 'line-opacity', streetsShown ? 0 : on ? 0.35 : 0.9);
 }

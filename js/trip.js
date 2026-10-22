@@ -189,7 +189,7 @@ function buildFacts() {
       if (dist > 60) return null;
       const near = turf.nearestPointOnLine(t.line, pt, { units: 'kilometers' }).properties;
       const along = near.location ?? near.lineDistance ?? 0;
-      return { nome: p.name || `${CAT[p.cat].one} sem nome no mapa${atStreet(along * 1000)}`, categoria: CAT[p.cat].one, cat: p.cat, distancia_da_rota_m: Math.round(dist),
+      return { id: p.id, nome: p.name || `${CAT[p.cat].one} sem nome no mapa${atStreet(along * 1000)}`, categoria: CAT[p.cat].one, cat: p.cat, distancia_da_rota_m: Math.round(dist),
         hora_aprox: hhmm(new Date(leave.getTime() + (along / t.length) * t.time * 1000)), along, lng: p.lng, lat: p.lat };
     })
     .filter(Boolean).sort((a, b) => a.along - b.along).slice(0, 15);
@@ -229,7 +229,7 @@ function buildFacts() {
       proximo_evento: next ? { evento: next[0], hora: hhmm(next[1]), minutos_apos_chegada: Math.round((next[1] - arrive) / 60e3) } : null },
     nuvens: c ? { total_pct: c.total, baixas_pct: c.low, altas_pct: c.high } : null,
     trechos,
-    pontos_no_caminho: pontos.map(({ along, lng: _x, lat: _y, cat, ...rest }) => rest),
+    pontos_no_caminho: pontos.map(({ id: _id, along, lng: _x, lat: _y, cat, ...rest }) => rest),
     estilos_preferidos: PHOTO_STYLES.filter((x) => state.styles.has(x.id)).map((x) => x.label),
     _pontos: pontos, // uso interno das regras (coordenadas, categoria); não vai no JSON exibido
     _styles: [...state.styles],
@@ -320,5 +320,6 @@ function renderTrip() {
   renderTips(f);
   if (!$("#ai-size").children.length) renderAiControls();
   aiOnFacts(f);
+  if (typeof mapFocus !== 'undefined' && mapFocus.on && mapFocus.available) setFocus(true, { fit: false }); // horário mudou: pontos citados também
   refreshSummaries();
 }

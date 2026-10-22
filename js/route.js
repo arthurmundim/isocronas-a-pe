@@ -26,6 +26,8 @@ async function showRoute(lat, lng, dest = null, { show = false } = {}) {
   updateLight(); // linhas do sol e horários passam a partir do destino
   if (show) reveal('#sec-route');
   setStatus('route-status', 'Calculando rota…', 'loading');
+  // Cancelar a rota volta à escolha do destino (clearRoute reabre a etapa de pontos).
+  opStart('route', '#route-status', () => { routeSeq++; abortApis(['Valhalla']); clearRoute(); });
   setSourceData('route', { type: 'FeatureCollection', features: [turf.point([lng, lat])] });
   try {
     const data = await valhalla('/route', {
@@ -42,6 +44,7 @@ async function showRoute(lat, lng, dest = null, { show = false } = {}) {
     state.trip = { target: { lat, lng }, dest, time, length, line, maneuvers: leg.maneuvers, elev: null };
     renderTrip();
     enrichStreetNames(state.trip);
+    opEnd('route'); // a elevação continua em segundo plano, sem travar o painel
     if (show) reveal('#trip'); // "Quando?" pede o horário
     setStatus('route-status', 'Carregando elevação…', 'loading');
     const h = await valhalla('/height', { encoded_polyline: leg.shape, shape_format: 'polyline6', range: true, resample_distance: Math.max(10, Math.round(length * 1000 / 200)) });
@@ -55,10 +58,13 @@ async function showRoute(lat, lng, dest = null, { show = false } = {}) {
   } catch (e) {
     if (seq !== routeSeq) return;
     setStatus('route-status', e.message, true);
+    opEnd('route');
   }
 }
 function clearRoute() {
+  opEnd('route');
   routeSeq++;
+  focusReset();
   const had = !!state.routeTarget;
   state.routeTarget = null;
   state.trip = null;

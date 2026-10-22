@@ -60,15 +60,63 @@ const limits = {
   photon: limiter(250),
 };
 
+// ==== OPERAÇÕES CANCELÁVEIS ====
+// Carregamentos iniciados pelo usuário (busca, mancha, pontos, rota, IA) travam os botões do painel e mostram
+// "Cancelar" ao lado do status do passo. Cancelar aborta as requisições daquelas APIs e restaura o passo anterior.
+const fetchCtrls = new Map(); // api → Set<AbortController> em andamento
+function abortApis(apis) {
+  for (const a of apis) for (const c of fetchCtrls.get(a) || []) c.abort('cancel');
+}
+const ops = new Map(); // nome → { onCancel, btn }
+const opBusy = () => ops.size > 0;
+function opStart(name, anchor, onCancel) {
+  opEnd(name);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn op-cancel';
+  btn.textContent = 'Cancelar';
+  btn.addEventListener('click', () => opCancel(name));
+  (typeof anchor === 'string' ? $(anchor) : anchor)?.after(btn);
+  ops.set(name, { onCancel, btn });
+  lockPanel();
+}
+function opEnd(name) {
+  const op = ops.get(name);
+  if (!op) return;
+  op.btn.remove();
+  ops.delete(name);
+  lockPanel();
+}
+function opCancel(name) {
+  const op = ops.get(name);
+  if (!op) return;
+  opEnd(name);
+  op.onCancel();
+}
+// Trava: atributo disabled nos controles que existem agora (teclado) + CSS para os que forem desenhados durante a trava.
+function lockPanel() {
+  const on = ops.size > 0;
+  $('#panel').classList.toggle('busy-lock', on);
+  for (const el of $('#panel').querySelectorAll('button, input, select')) {
+    if (el.classList.contains('op-cancel') || el.id === 'sheet-handle') continue;
+    if (on && !el.disabled) { el.disabled = true; el.dataset.lock = '1'; }
+    else if (!on && el.dataset.lock) { el.disabled = false; delete el.dataset.lock; }
+  }
+  if (typeof pin !== 'undefined') pin.setDraggable(!on);
+}
+
 async function fetchJSON(api, url, opts = {}, timeoutMs = 30000) {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const timer = setTimeout(() => ctrl.abort('timeout'), timeoutMs);
+  if (!fetchCtrls.has(api)) fetchCtrls.set(api, new Set());
+  fetchCtrls.get(api).add(ctrl);
   let res;
   try {
     res = await fetch(url, { ...opts, signal: ctrl.signal });
   } catch (e) {
+    if (ctrl.signal.reason === 'cancel') throw Object.assign(new ApiError(api, `${api}: cancelado`), { cancelled: true });
     throw new ApiError(api, e.name === 'AbortError' ? `${api}: tempo esgotado` : `${api}: sem conexão ou bloqueado`);
-  } finally { clearTimeout(timer); }
+  } finally { clearTimeout(timer); fetchCtrls.get(api).delete(ctrl); }
   let body = null;
   try { body = await res.json(); } catch { /* corpo não-JSON */ }
   if (!res.ok) {

@@ -121,13 +121,13 @@ async function qaRephrase(m, opts) {
     + 'Mantenha exatamente o sentido e o lugar citado; não acrescente horários, números nem lugares. '
     + 'Responda com uma linha por pergunta, numeradas "1)", "2)", "3)", e nada mais.';
   try {
-    const r = await engine.chat.completions.create({ temperature: 0.3, max_tokens: 160, messages: [
+    const r = await engineRun(() => engine.chat.completions.create({ temperature: 0.3, max_tokens: 160, messages: [
       { role: 'system', content: sys },
       // Exemplo: o modelo pequeno às vezes RESPONDE a pergunta em vez de reescrevê-la.
       { role: 'user', content: 'Momento: 07:10 · Paço Imperial — o que observar: fachada histórica\nPerguntas:\n1) Por que essa configuração de câmera aqui?\n2) Se eu não entrar em Paço Imperial e ficar do lado de fora, essa configuração funciona?\n3) Como enquadrar essa cena?' },
       { role: 'assistant', content: '1) Por que essa configuração faz sentido aqui no Paço Imperial?\n2) Se eu ficar do lado de fora do Paço Imperial, essa configuração ainda serve?\n3) Como eu enquadro essa cena do Paço Imperial?' },
       { role: 'user', content: `Momento: ${momentLine(m)}\nPerguntas:\n${opts.map((o, i) => `${i + 1}) ${o.text}`).join('\n')}` },
-    ] });
+    ] }));
     const lines = parseAiLines(r.choices[0].message.content || '');
     const place = m.onde.split(/[,(]/)[0].trim().toLowerCase();
     const words = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').match(/[a-z]{4,}/g) || [];
@@ -248,24 +248,25 @@ let qaGrammar = true; // cai para JSON "no texto" se o WebLLM recusar response_f
 function qaWarmup() {
   const engine = aiState.engine;
   if (!engine || !qaGrammar) return;
-  const job = engine.chat.completions.create({ max_tokens: 1, temperature: 0, messages: [{ role: 'user', content: 'ok' }],
-    response_format: { type: 'json_object', schema: QA_SCHEMA } })
+  const job = engineRun(() => engine.chat.completions.create({ max_tokens: 1, temperature: 0, messages: [{ role: 'user', content: 'ok' }],
+    response_format: { type: 'json_object', schema: QA_SCHEMA } }))
     .catch(() => { qaGrammar = false; })
     .finally(() => { if (qaState.pending === job) qaState.pending = null; });
   qaState.pending = job;
 }
-async function qaAnswer(m, q, tpl, data, forbidden) {
+async function qaAnswer(m, q, tpl, data, forbidden, isCancelled = () => false) {
   const engine = await aiEngine();
   const known = `${m.hora} ${m.onde} ${m.ver} ${dataText(data)}`;
   let res = null, issues = [];
   for (const temperature of [0.2, 0.1]) {
+    if (isCancelled()) break; // cancelado: não faz a 2ª tentativa
     const req = { temperature, top_p: 0.8, max_tokens: 200, messages: qaMessages(m, q, tpl, data, forbidden, issues.join('; ')) };
     let r;
-    try { r = await engine.chat.completions.create(qaGrammar ? { ...req, response_format: { type: 'json_object', schema: QA_SCHEMA } } : req); }
+    try { r = await engineRun(() => engine.chat.completions.create(qaGrammar ? { ...req, response_format: { type: 'json_object', schema: QA_SCHEMA } } : req)); }
     catch (e) {
       if (!qaGrammar) throw e;
       qaGrammar = false; // sem suporte a gramática: segue só com prompt + validação
-      r = await engine.chat.completions.create(req);
+      r = await engineRun(() => engine.chat.completions.create(req));
     }
     res = qaParse(r.choices[0].message.content || '');
     for (const k of QA_FIELDS) res[k] = firstSentence(res[k]);
@@ -338,6 +339,7 @@ async function qaAsk(i, id) {
   const c = { blocked: qaState.facts.nuvens?.total_pct >= 85, styles: new Set(qaState.facts._styles) };
   const cam = tpl.cam ? tpl.cam(m, c) : null;
   const data = tpl.data(m, c, cam);
+  const offeredBefore = b.offered;
   qaState.busy = true;
   qaState.asked += 1;
   b.asked.add(id);
@@ -345,10 +347,28 @@ async function qaAsk(i, id) {
   const entry = { q: opt.text, res: null, cam };
   b.thread.push(entry);
   renderQa(i);
-  reveal(document.querySelector(`.qa[data-i="${i}"] .qa-thread`).lastElementChild, 'nearest');
+  const box = document.querySelector(`.qa[data-i="${i}"]`);
+  reveal(box.querySelector('.qa-thread').lastElementChild, 'nearest');
+  // Cancelar desfaz a pergunta (não conta no limite) e devolve as mesmas 3 opções.
+  let cancelled = false;
+  opStart('qa', box.querySelector('.qa-thread'), () => {
+    cancelled = true;
+    aiInterrupt();
+    b.thread.pop();
+    b.asked.delete(id);
+    qaState.asked -= 1;
+    b.offered = offeredBefore;
+    qaState.busy = false;
+    renderQa(i);
+  });
   try {
     await qaState.pending; // espera a reescrita de perguntas liberar o motor
-    const { res, issues } = await qaAnswer(m, opt.text, tpl, data, qaForbidden(m, c, cam, tpl));
+    // Fica em qaState.pending para nada usar o motor ao mesmo tempo (mesmo depois de um Cancelar).
+    const job = qaAnswer(m, opt.text, tpl, data, qaForbidden(m, c, cam, tpl), () => cancelled);
+    const pend = job.catch(() => {}).finally(() => { if (qaState.pending === pend) qaState.pending = null; });
+    qaState.pending = pend;
+    const { res, issues } = await job;
+    if (cancelled) return;
     if (!issues.length) entry.res = res;
     else {
       // A IA errou duas vezes: não mostramos o texto dela, e sim a resposta calculada pelo app.
@@ -356,9 +376,11 @@ async function qaAsk(i, id) {
       entry.note = `A IA não respondeu com segurança (${issues.join('; ')}); mostrando a resposta calculada pelo app.`;
     }
   } catch (e) {
+    if (cancelled) return;
     entry.res = qaFallback(data, cam, tpl, m);
     entry.note = `Não consegui rodar a IA agora (${String(e?.message || e).slice(0, 80)}); mostrando a resposta calculada pelo app.`;
   }
+  opEnd('qa');
   qaState.busy = false;
   renderQa(i);
   // Cada resposta traz 3 novas perguntas sobre o mesmo bloco, até o limite.
