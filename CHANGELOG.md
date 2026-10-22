@@ -2,6 +2,20 @@
 
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/); versões seguem [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.7.0] - 2026-10-22
+
+### Adicionado
+- "Cancelar" em todo passo que carrega (busca, mancha, espera dos pontos, rota, IA e perguntas). Durante o carregamento os botões do painel e os cliques no mapa ficam travados. Cancelar volta ao estado anterior: a mancha volta ao último resultado completo (ou à escolha do ponto), a espera dos pontos volta à Caminhada, a rota volta à escolha do destino, a IA volta à escolha entre resposta rápida e IA, e a pergunta é desfeita (não conta no limite).
+- Modo foco no mapa: quando a sugestão aparece, os pontos citados ficam coloridos e com nome, o resto fica em cinza, a mancha fica acinzentada e o mapa enquadra a rota. Botão no mapa "👁 Ver tudo" / "🎯 Focar no trajeto".
+
+### Alterado
+- O texto da IA é gerado inteiro antes de aparecer (com progresso "Escrevendo (2 de 4 momentos)…") e entra com uma animação em blocos, uma única vez. Antes, a nova tentativa fazia a escrita aparecer duas vezes.
+
+### Corrigido
+- Busca com número: duas regex dentro de template string tinham `\b`/`\s`/`\D` com uma barra só (viravam outro caractere); a "rua sem número" nunca era encontrada e o número exato do Nominatim só era aceito quando idêntico.
+- Mapa podia ficar com 300 px de altura quando a página carregava numa aba oculta; agora se redimensiona ao voltar/girar/mudar a janela.
+- Depois de um "Cancelar" numa resposta da IA, as respostas seguintes saíam vazias (no WebLLM 0.2.85 o sinal de interrupção não é zerado nas chamadas sem streaming).
+
 ## [0.6.3] - 2026-10-21
 
 ### Alterado
@@ -136,6 +150,7 @@ Primeira versão funcional.
 - Layout responsivo: painel lateral vira bottom sheet no celular.
 - Cache em memória, filas com intervalo mínimo por API e fallback/backoff entre servidores Overpass.
 
+[0.7.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.6.1...v0.6.3
 [0.6.1]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/arthurmundim/isocronas-a-pe/compare/v0.5.6...v0.6.0

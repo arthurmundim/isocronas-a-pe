@@ -15,6 +15,7 @@ Dicas de uso:
 - Escolha o ritmo (Fotografando, Passeio, Normal, Apressado) e ligue "Evitar ladeiras" se quiser priorizar ruas planas.
 - O painel avança em etapas: cada uma concluída vira uma linha de resumo (clique para editar). Depois da Caminhada, espere os pontos aparecerem no mapa e clique um destino. Com a rota aberta, o "Quando?" mostra os horários de luz e as nuvens do dia; escolha o dia e "Sair às" ou "Chegar às" (ou um atalho como "Chegar: Golden tarde") e marque os estilos de foto que você gosta: o app sugere o que observar no caminho (contraluz, fachadas iluminadas, corredores de luz, lugares perto da rota). As linhas do sol passam a sair do destino.
 - Em "Sugestões para o caminho", escolha o tamanho e depois "⚡ Resposta rápida" (dicas por regras, na hora) ou "✨ Gerar com IA", que escreve um texto de amigo fotógrafo sobre a caminhada, com as configurações de câmera de cada momento. Em cada momento, "💬 Perguntar sobre este momento" oferece 3 perguntas prontas (até 5 por texto). Roda no seu aparelho, sem enviar dados; na primeira vez baixa o modelo (~0,9 GB).
+- Enquanto algo carrega, os botões ficam travados e aparece "Cancelar", que volta ao passo anterior. Quando a sugestão aparece, o mapa destaca só os pontos citados e a rota; "👁 Ver tudo" volta ao mapa completo.
 - O link da página guarda a exploração (ponto, anéis, velocidade, filtros, data e tema). Use "Copiar link" para compartilhar.
 
 ## APIs usadas
