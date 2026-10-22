@@ -11,12 +11,15 @@ const map = new maplibregl.Map({
   attributionControl: { compact: true },
 });
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'top-right');
-map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } }), 'top-right');
+// ◎ define o ponto de partida onde a pessoa está (não só move o mapa).
+const geolocate = new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } });
+geolocate.on('geolocate', (e) => { if (!mapLocked()) setPoint(e.coords.latitude, e.coords.longitude, 'Minha localização', { fly: false }); });
+map.addControl(geolocate, 'top-right');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 // Se a página carregou numa aba oculta, o canvas pode ficar com o tamanho padrão (300 px) até o próximo resize.
 for (const ev of ['resize', 'orientationchange']) window.addEventListener(ev, () => map.resize());
 document.addEventListener('visibilitychange', () => { if (!document.hidden) map.resize(); });
-map.once('load', () => map.resize());
+map.once('load', () => { map.resize(); $('#map-loading').remove(); });
 
 // ==== CAMADAS (sobrevivem à troca de estilo) ====
 // setStyle() apaga sources/layers custom; cada overlay registrado é re-adicionado em todo 'style.load'.
@@ -40,21 +43,33 @@ function setSourceData(id, fc) {
   map.getSource(id)?.setData(sourceData[id]);
 }
 
-// ==== ESTILO CLARO/ESCURO ====
-class StyleToggle {
+// ==== BOTÕES DO MAPA (UMA COLUNA) ====
+// Tema (aqui), foco (flow.js), glossário e tour (help.js) entram na mesma coluna, na ordem em que são adicionados.
+class MapTools {
   onAdd() {
     this.el = document.createElement('div');
-    this.el.className = 'maplibregl-ctrl maplibregl-ctrl-group';
-    this.el.innerHTML = '<button class="map-btn" type="button" title="Alternar mapa claro/escuro"></button>';
-    this.el.firstChild.addEventListener('click', () => setMapStyle(state.style === 'light' ? 'dark' : 'light'));
-    this.render();
+    this.el.className = 'maplibregl-ctrl maplibregl-ctrl-group map-tools';
     return this.el;
   }
-  render() { if (this.el) this.el.firstChild.textContent = state.style === 'light' ? '🌙 Escuro' : '☀️ Claro'; }
+  add(title, onClick) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'map-btn';
+    b.title = title;
+    b.addEventListener('click', onClick);
+    this.el.appendChild(b);
+    return b;
+  }
   onRemove() { this.el.remove(); }
 }
-const styleToggle = new StyleToggle();
-map.addControl(styleToggle, 'top-left');
+const mapTools = new MapTools();
+map.addControl(mapTools, 'top-left');
+
+// ==== ESTILO CLARO/ESCURO ====
+const styleToggle = {
+  btn: mapTools.add('Alternar mapa claro/escuro', () => setMapStyle(state.style === 'light' ? 'dark' : 'light')),
+  render() { this.btn.textContent = state.style === 'light' ? '🌙 Escuro' : '☀️ Claro'; },
+};
 
 function setMapStyle(style, { apply = true } = {}) {
   if (!CONFIG.styles[style]) style = 'light';
@@ -66,24 +81,41 @@ function setMapStyle(style, { apply = true } = {}) {
   if (changed && apply) { styleReady = false; map.setStyle(CONFIG.styles[style], { diff: false }); }
   onStateChanged();
 }
-function onStateChanged() { writeHash(); refreshSummaries(); }
+function onStateChanged() {
+  writeHash();
+  refreshSummaries();
+  $('#panel').classList.toggle('started', !!state.point); // cabeçalho fino depois do ponto escolhido
+  $('#share').disabled = !state.point;
+}
 
 const pin = new maplibregl.Marker({ color: '#e5484d', draggable: true });
 pin.on('dragend', () => { const { lng, lat } = pin.getLngLat(); setPoint(lat, lng, null, { fly: false }); });
 
 // Clique dentro da mancha = rota até lá; fora = novo ponto. Clique direito sempre move o pin.
 // Durante um carregamento iniciado pelo usuário o mapa não dispara outra ação (o painel mostra "Cancelar").
+// Exceção: na espera dos pontos dá para escolher o destino clicando na mancha (os pontos entram depois).
 const mapLocked = () => {
-  if (!opBusy()) return false;
+  if (!opBusy() || (ops.size === 1 && ops.has('pois'))) return false;
   toast('Aguarde o carregamento terminar ou clique em "Cancelar" no painel.', 'info', 2500);
   return true;
 };
+// Com rota aberta, um toque fora da mancha (fácil de acontecer no celular) pergunta antes de trocar o ponto.
+let movePopup = null;
+function confirmMovePoint(lat, lng) {
+  movePopup?.remove();
+  const el = document.createElement('div');
+  el.className = 'popup';
+  el.innerHTML = '<p>Mudar o ponto de partida para cá? A rota atual será descartada.</p><div class="row"><button class="btn btn-sm btn-primary" type="button">Mudar ponto</button></div>';
+  el.querySelector('button').addEventListener('click', () => { movePopup.remove(); setPoint(lat, lng, null, { fly: false }); });
+  movePopup = new maplibregl.Popup({ offset: 6, maxWidth: '240px' }).setLngLat([lng, lat]).setDOMContent(el).addTo(map);
+}
 map.on('click', (e) => {
   if (mapLocked()) return;
   const { lat, lng } = e.lngLat;
   const poi = map.getLayer('poi') && map.queryRenderedFeatures(e.point, { layers: ['poi'] })[0];
   if (poi) openPoi(poi.properties.id);
   else if (insideIsochrone(lng, lat)) showRoute(lat, lng, null, { show: true });
+  else if (state.routeTarget) confirmMovePoint(lat, lng);
   else setPoint(lat, lng, null, { fly: false });
 });
 map.on('contextmenu', (e) => { if (!mapLocked()) setPoint(e.lngLat.lat, e.lngLat.lng, null, { fly: false }); });
@@ -92,7 +124,7 @@ map.on('contextmenu', (e) => { if (!mapLocked()) setPoint(e.lngLat.lat, e.lngLat
 function setPoint(lat, lng, label = null, { fly = true, show = true } = {}) {
   state.point = { lat: round(lat), lng: round(lng), label };
   pin.setLngLat([state.point.lng, state.point.lat]).addTo(map);
-  if (fly) map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 14) });
+  if (fly) map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 14), offset: sheetOffset() });
   setStatus('search-status', label ? `📍 ${label}` : `📍 ${state.point.lat.toFixed(5)}, ${state.point.lng.toFixed(5)}`);
   flowNewPoint();
   onPointChanged();
@@ -103,6 +135,7 @@ function onPointChanged() {
   clearPois();
   state.iso = null; // a mancha do ponto anterior não vale mais (evita abrir a etapa de pontos com dados velhos)
   poiPopup?.remove();
+  movePopup?.remove();
   computeIsochrones();
   updateLight();
   loadClouds();
@@ -112,4 +145,15 @@ function onPointChanged() {
 // No celular o bottom sheet cobre a parte de baixo do mapa.
 const isMobile = () => matchMedia('(max-width: 760px)').matches;
 const mapPadding = () => (isMobile() ? { top: 50, left: 30, right: 50, bottom: $('#panel').offsetHeight + 20 } : 40);
+// Desloca o centro para a parte do mapa que o painel não cobre.
+const sheetOffset = () => (isMobile() ? [0, -$('#panel').offsetHeight / 2] : [0, 0]);
+// Celular: quando a mancha, a rota ou o foco aparecem, o painel desce para o mapa ficar em destaque.
+// Volta ao tamanho normal com um toque no painel (main.js). Resolve depois da transição de altura.
+function sheetPeek() {
+  const p = $('#panel');
+  if (!isMobile() || p.classList.contains('collapsed') || p.classList.contains('peek')) return Promise.resolve();
+  p.classList.remove('expanded');
+  p.classList.add('peek');
+  return new Promise((r) => setTimeout(r, 230));
+}
 const firstSymbolLayer = () => map.getStyle().layers.find((l) => l.type === 'symbol')?.id;

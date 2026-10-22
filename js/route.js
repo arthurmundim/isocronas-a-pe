@@ -5,18 +5,21 @@ registerOverlay(() => {
   map.addLayer({ id: 'route-casing', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
     layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': 7, 'line-opacity': 0.8 } });
   map.addLayer({ id: 'route-line', type: 'line', source: 'route', filter: ['==', '$type', 'LineString'],
-    layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#2563eb', 'line-width': 4 } });
+    layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#1e3a8a', 'line-width': 4 } });
   map.addLayer({ id: 'route-end', type: 'circle', source: 'route', filter: ['==', '$type', 'Point'],
-    paint: { 'circle-radius': 6, 'circle-color': '#2563eb', 'circle-stroke-color': '#fff', 'circle-stroke-width': 2 } });
+    paint: { 'circle-radius': 6, 'circle-color': '#1e3a8a', 'circle-stroke-color': '#fff', 'circle-stroke-width': 2 } });
 });
 
 let routeSeq = 0;
 // dest: ponto de interesse clicado (opcional), usado nas dicas.
 // show: clique do usuário num destino novo; zera a escolha de sugestão e rola até a rota (recálculos não rolam).
-async function showRoute(lat, lng, dest = null, { show = false } = {}) {
+// restore: rota vinda do link; abre as etapas como num clique, mas sem rolar o painel.
+async function showRoute(lat, lng, dest = null, { show = false, restore = false } = {}) {
   if (!state.point) return;
   const seq = ++routeSeq;
-  if (show) { resetSuggest(); flowRouteStart(); }
+  if (show || restore) { resetSuggest(); flowRouteStart(); }
+  // Destino do link: o ponto de interesse (se for um) é reconhecido quando os pontos carregarem (pois.js).
+  if (!dest) dest = state.pois.find((p) => round(p.lat) === round(lat) && round(p.lng) === round(lng)) || null;
   state.routeTarget = { lat, lng };
   state.trip = null;
   $('#sec-route').hidden = false;
@@ -46,6 +49,7 @@ async function showRoute(lat, lng, dest = null, { show = false } = {}) {
     enrichStreetNames(state.trip);
     opEnd('route'); // a elevação continua em segundo plano, sem travar o painel
     if (show) reveal('#trip'); // "Quando?" pede o horário
+    if (show || restore) sheetPeek().then(() => map.fitBounds(turf.bbox(line), { padding: mapPadding(), maxZoom: 17, duration: 600 }));
     setStatus('route-status', 'Carregando elevação…', 'loading');
     const h = await valhalla('/height', { encoded_polyline: leg.shape, shape_format: 'polyline6', range: true, resample_distance: Math.max(10, Math.round(length * 1000 / 200)) });
     if (seq !== routeSeq) return;
@@ -70,7 +74,7 @@ function clearRoute() {
   state.trip = null;
   setSourceData('route', EMPTY);
   $('#sec-route').hidden = true;
-  if (had) { updateLight(); flowRouteCleared(); } // luz volta a ter o pin como referência
+  if (had) { updateLight(); flowRouteCleared(); onStateChanged(); } // luz volta a ter o pin como referência
 }
 $('#route-clear').addEventListener('click', clearRoute);
 

@@ -1,6 +1,6 @@
 'use strict';
 // ==== ESTADO NA URL ====
-// #lat=..&lng=..&q=rótulo&t=5,10,15,20&v=5&h=0.5&cat=viewpoint,cafe&d=2026-10-21&s=dark
+// #lat=..&lng=..&q=rótulo&t=5,10,15,20&v=5&h=0.5&cat=viewpoint,cafe&d=2026-10-21&s=dark&to=lat,lng&sair=17:30 (ou chegar=)
 function parseHash() {
   const p = new URLSearchParams(location.hash.slice(1));
   const num = (k) => (p.has(k) ? parseFloat(p.get(k)) : NaN);
@@ -15,6 +15,12 @@ function parseHash() {
   if (/^\d{4}-\d{2}-\d{2}$/.test(p.get('d') || '')) out.date = p.get('d');
   out.style = p.get('s') === 'dark' ? 'dark' : 'light';
   if (p.has('f')) out.styles = new Set(p.get('f').split(',').filter((id) => PHOTO_STYLES.some((s) => s.id === id)));
+  // Destino e horário: o link reabre a rota e o "Quando?".
+  const [tlat, tlng] = (p.get('to') || '').split(',').map(parseFloat);
+  if (out.point && Math.abs(tlat) <= 90 && Math.abs(tlng) <= 180) out.to = { lat: tlat, lng: tlng };
+  for (const [key, mode] of [['sair', 'leave'], ['chegar', 'arrive']]) {
+    if (/^\d{2}:\d{2}$/.test(p.get(key) || '')) out.depart = { mode, time: p.get(key) };
+  }
   return out;
 }
 function applyHashToState(h) {
@@ -25,6 +31,7 @@ function applyHashToState(h) {
   state.date = h.date || todayStr();
   state.styles = h.styles || loadStoredStyles();
   state.style = h.style;
+  state.depart = h.depart || { mode: 'leave', time: null };
 }
 function syncControls() {
   $('#times').value = state.times.join(', ');
@@ -49,7 +56,11 @@ function writeHash() {
     if (state.date !== todayStr()) p.set('d', state.date);
     if (state.style !== 'light') p.set('s', state.style);
     if (state.styles.size) p.set('f', [...state.styles].join(','));
-    lastHash = p.toString().replace(/%2C/g, ',');
+    if (state.point && state.routeTarget) {
+      p.set('to', `${state.routeTarget.lat.toFixed(5)},${state.routeTarget.lng.toFixed(5)}`);
+      if (state.depart.time) p.set(state.depart.mode === 'arrive' ? 'chegar' : 'sair', state.depart.time);
+    }
+    lastHash = p.toString().replace(/%2C/g, ',').replace(/%3A/g, ':');
     try { history.replaceState(null, '', '#' + lastHash); } catch { location.hash = lastHash; }
   }, 300);
 }
@@ -72,6 +83,9 @@ window.addEventListener('hashchange', () => {
     computeIsochrones();
     updateLight();
   }
+  const sameTo = h.to && state.routeTarget && round(h.to.lat) === round(state.routeTarget.lat) && round(h.to.lng) === round(state.routeTarget.lng);
+  if (h.to && !sameTo) showRoute(h.to.lat, h.to.lng, null, { restore: true });
+  else if (state.trip) renderTrip(); // só o horário mudou
 });
 
 $('#share').addEventListener('click', async () => {

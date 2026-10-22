@@ -13,7 +13,7 @@ async function overpassQuery(query, { onRetry, isStale }) {
         const data = await limits.overpass(() => fetchJSON('Overpass', url, {
           method: 'POST', body: new URLSearchParams({ data: query }), // form-urlencoded = sem preflight CORS
         }, 45000));
-        if (!data.elements?.length && data.remark) throw new ApiError('Overpass', 'Overpass: ' + data.remark.slice(0, 90), 500);
+        if (!data.elements?.length && data.remark) throw new ApiError('Overpass', 'Pontos do mapa: a busca demorou demais nesta área', 500);
         return data;
       } catch (e) {
         lastErr = e;
@@ -21,12 +21,12 @@ async function overpassQuery(query, { onRetry, isStale }) {
       }
     }
     if (round < 2) {
-      onRetry(`Servidores do Overpass ocupados; tentando de novo em ${wait / 1000} s…`);
+      onRetry(`Os servidores de pontos do mapa estão ocupados; tentando de novo em ${wait / 1000} s…`);
       await new Promise((r) => setTimeout(r, wait));
       wait *= 2;
     }
   }
-  throw new ApiError('Overpass', 'Overpass: servidores públicos ocupados agora (' + lastErr.message.replace(/^Overpass: /, '') + ')');
+  throw new ApiError('Overpass', 'Os servidores de pontos do mapa estão ocupados agora. Tente de novo em alguns minutos');
 }
 
 async function fetchPoiElements(bbox, opts) {
@@ -55,7 +55,7 @@ async function loadPois() {
   const outer = state.iso?.features[0];
   if (!outer) return;
   const seq = ++poiSeq;
-  setStatus('poi-status', 'Buscando pontos no OpenStreetMap… (o Overpass pode levar até ~30 s)', 'loading');
+  setStatus('poi-status', 'Buscando pontos para fotografar… (pode levar até ~30 s)', 'loading');
   poiError = false;
   poiLoading = true;
   renderPois();
@@ -72,6 +72,11 @@ async function loadPois() {
       p.ring = ringOf(p.lng, p.lat);
       return true;
     }).sort((a, b) => a.ring - b.ring || a.name.localeCompare(b.name));
+    // Rota escolhida antes dos pontos (espera ou link): se o destino é um ponto de interesse, ele entra nas dicas.
+    if (state.trip && !state.trip.dest) {
+      const { lat, lng } = state.trip.target;
+      state.trip.dest = state.pois.find((p) => round(p.lat) === round(lat) && round(p.lng) === round(lng)) || null;
+    }
     setStatus('poi-status', '');
   } catch (e) {
     if (seq !== poiSeq) return;
